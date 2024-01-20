@@ -1,3 +1,4 @@
+#include <avr/interrupt.h>
 #include "pins_arduino.h"
 #include "hvacontrol.h"
 #include "WString.h"
@@ -12,15 +13,16 @@
 
 int aState, aLastState;
 bool devMode = false;
-int deg = 0, max = 100;
+int setdelta = 5, maxdelta = 50;
 int ValveStatusPin=A0, WaterTempPin=A1, RHPin=A2, AirTempPin=A3;
- 
+
 LiquidCrystal_I2C lcd(0x27,16,2);
 
-hvacontrol::hvacontrol(int encoderPinA, int encoderPinB, int buttonClick) {
+hvacontrol::hvacontrol(int encoderPinA, int encoderPinB, int buttonClick, int valvecontrolPin) {
   _encoderPinA = encoderPinA;
   _encoderPinB = encoderPinB;
   _buttonClick = buttonClick;
+  _valvecontrolPin = valvecontrolPin;
   _onofsw  = false;
 
   pinMode(_encoderPinA, INPUT); 
@@ -75,25 +77,79 @@ double hvacontrol::PIDcalc(double inp, int sp){
 }
 
 
+void hvacontrol::run(int kpp, int kii, int kdd){
+  float pipetempPV = getwatertemp();//a number between 0-50
+  float pipetempSP = setpipetemp();//default dp+5, otherwise between dp and 50
+  setValve(PIDcalc(pipetempPV, pipetempSP));//expexts values between 0..100
+  checkButton();
+}
+
+float hvacontrol::setpipetemp(){ // returns the setpoint pipe temp
+  aState = digitalRead(_encoderPinA); // Reads the "current" state of the outputA
+   // If the previous and the current state of the outputA are different, that means a Pulse has occured
+  if (aState != aLastState){     
+     // If the outputB state is different to the outputA state, that means the encoder is rotating clockwise
+     if (digitalRead(_encoderPinB) != aState) { 
+      if (setdelta < maxdelta){
+       setdelta = setdelta + 0.1;
+      }
+     } 
+     else if (setdelta > 0){
+       setdelta = setdelta - 0.1;
+     }
+   } 
+  aLastState = aState; // Updates the previous state of the outputA with the current state
+  float tempdpreading = getdew_point();
+  float dpdelta = tempdpreading + setdelta;
+  ShowInfoLcd(tempdpreading, setdelta);
+  return dpdelta;
+}
+
+void hvacontrol::checkButton(){
+  if (digitalRead(_buttonClick) == 0){
+    devMode = !devMode;
+    //Serial.println("Button Clicked");
+
+   }
+}
+
+float hvacontrol::getdew_point(){
+  float airtemp = analogRead(AirTempPin);
+  airtemp = map(airtemp, 0 ,5, 0, 50); //verify correct settings of S1 jumper in 22UTH-13
+  float rh = analogRead(RHPin);
+  rh = map(rh, 0, 5, 0, 50);//verify correct settings of S1 jumper in 22UTH-13
+  float dewpoint = airtemp - ((100 - rh) / 5);
+  return dewpoint;
+}
+float hvacontrol::getvalvestat(){
+  float valvestatus = analogRead(ValveStatusPin);
+  return valvestatus;
+}
+
+float hvacontrol::getwatertemp(){
+  float watertemp = analogRead(WaterTempPin);
+  watertemp = map(watertemp, 0 , 5, 0, 50);//jumper S2 should be selected to 0-50 in 22UT-14
+  return watertemp;
+}
+
 void hvacontrol::lcdswitch(bool status){
   if(status){lcd.backlight();}
   else{lcd.setBacklight(0);}
 }
 
-void hvacontrol::ShowInfoLcd(int speed, int direction, int BTstatus){ 
+void hvacontrol::ShowInfoLcd(int dp, int setdp){ 
   //lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("speed| dir | bat");
+  //         0123456789012345
+  lcd.print("DewPoint");
+  lcd.setCursor(11,0);
+  lcd.print(dp);  
   lcd.setCursor(1,1);
-  lcd.print(speed);  
-  lcd.setCursor(4,1);
-  lcd.print(" |  "); 
-  lcd.setCursor(7,1);
-  lcd.print(direction); 
+  lcd.print("Set for +"); 
+  lcd.setCursor(12,1);
+  lcd.print(setdp); 
   lcd.setCursor(10,1);
-  lcd.print(" | ");  
-  lcd.setCursor(13,1);
-
+  
 }
 
 void hvacontrol::lcdenshow(int clicks, int output, int tempsteps){ 
@@ -113,49 +169,13 @@ void hvacontrol::lcdenshow(int clicks, int output, int tempsteps){
   lcd.setCursor(12,1);
 }
 
-void hvacontrol::run(int kpp, int kii, int kdd){
-  checkencoder();
-  checkButton();
-  Serial.println(getdew_point());
-}
-void hvacontrol::checkencoder(){
-  aState = digitalRead(_encoderPinA); // Reads the "current" state of the outputA
-   // If the previous and the current state of the outputA are different, that means a Pulse has occured
-  if (aState != aLastState){     
-     // If the outputB state is different to the outputA state, that means the encoder is rotating clockwise
-     if (digitalRead(_encoderPinB) != aState) { 
-      if (deg < max){
-       deg ++;
-      }
-     } else {
-      if (deg > 0){
-       deg --;
-      }
-     }
-    
-     Serial.print("Position: ");
-     Serial.println(deg);
-   } 
-   
-   aLastState = aState; // Updates the previous state of the outputA with the current state
+bool hvacontrol::setValve(int valve){//0..100
+  int valveposition = map(valve, 0, 100, 0, 254);
+  analogWrite(_valvecontrolPin, valve);
+  int valvestatus = getvalvestat();
+  valvestatus = map(valvestatus, 0 , 1024, 0, 100);
+  if (valvestatus < valve){//check if valve got to the new position
+    return 0;
   }
-void hvacontrol::checkButton(){
-  if (digitalRead(_buttonClick) == 0){
-    devMode = !devMode;
-    Serial.println("Button Clicked");
-
-   }
+  return 1;
 }
-
-float hvacontrol::getdew_point(){
-  float airtemp = analogRead(AirTempPin);
-  float rh = analogRead(RHPin);
-
-  float dewpoint = airtemp - ((100 - rh) / 5);
-  return dewpoint;
-}
-float hvacontrol::getdew_valvestat(){
-  float valvestatus = analogRead(ValveStatusPin);
-  return valvestatus;
-}
-

@@ -11,24 +11,25 @@
 class hvacontrol { 
 
   public:
-    hvacontrol(int ecoderPinA, int ecoderPinB, int buttonClick); 
+    hvacontrol(int ecoderPinA, int ecoderPinB, int buttonClick, int valvecontrolPin); 
     void begin(double bdrate);    
-    int getrefligh();
-    void ShowInfoLcd(int speed, int direction, int BTstatus);
+    void ShowInfoLcd(int dp, int setdp);
     void lcdenshow(int clicks, int output, int tempsteps);
     void lcdswitch(bool status);
     void run(int kpp, int kii, int kdd);
     float getdew_point();
-    float getdew_valvestat();
-
+    float getvalvestat();
+    float getwatertemp();
+    bool setValve(int valve);
 
   private:
-    void checkencoder();
+    float setpipetemp();
     void checkButton();
 
     int _encoderPinA;
     int _encoderPinB;
     int _buttonClick;
+    int _valvecontrolPin;
 
 
 

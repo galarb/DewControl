@@ -104,7 +104,7 @@ void clicli::run() {
         break;
        
 
-        case 'e': // analog read
+      case 'e': // analog read
         pinMode(command[1],INPUT);
         Serial.print("Pin "); 
         Serial.print(command[1]);   
@@ -113,7 +113,10 @@ void clicli::run() {
         delay(1000);
         break;
 
-
+      case 'd'://print dew point
+        Serial.print("dew point = ");
+        Serial.println(myhvacontrol.getdew_point());
+        break;
        
        message_pos = 0;     //Reset for the next message
       }
