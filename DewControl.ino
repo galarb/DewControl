@@ -4,9 +4,12 @@
 hvacontrol hvac(
 5, //encoder A
 6, //encoder B
-2, //Button
 3); //valve control
+//Notes:
+//Button on pin 2
 //ValveStatus=A0, WaterTempPin=A1, RHPin=A2, AirTempPin=A3
+//10, 9, 8 cs, dc, rst
+//10(CS), 11(COPI), 12(CIPO), 13(SCK)
 
 clicli mycli(hvac); //setup clicli tool for hvac control
 

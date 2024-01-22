@@ -1,37 +1,39 @@
 /*                 ******************
               Class for HVAC Control
               Featuring: Dew Point calculation
-                          
+                         Valve Control 
                          PID function
+                         OLED HMI
+
                 By: Noam Ron, Tomer Ozer, Gal Arbel, 2024
-                **********************                                   */
+                **************************************              */
 #ifndef HVACONTROL_H
 #define HVACONTROL_H
 
 class hvacontrol { 
 
   public:
-    hvacontrol(int ecoderPinA, int ecoderPinB, int buttonClick, int valvecontrolPin); 
+    hvacontrol(int ecoderPinA, int ecoderPinB, int valvecontrolPin); 
     void begin(double bdrate);    
     void ShowInfoLcd(int dp, int setdp);
-    void lcdenshow(int clicks, int output, int tempsteps);
     void lcdswitch(bool status);
     void run(int kpp, int kii, int kdd);
     float getdew_point();
     float getvalvestat();
     float getwatertemp();
     bool setValve(int valve);
+    void tftwelcome();
+    void tftopershow(float dp, float sp);
+    void tftdatashow(float valve, float airtemp, float RH, float pipetemp);
+
 
   private:
     float setpipetemp();
-    void checkButton();
+    bool checkButton();
 
     int _encoderPinA;
     int _encoderPinB;
-    int _buttonClick;
     int _valvecontrolPin;
-
-
 
     double PIDcalc(double inp, int sp);
     unsigned long currentTime;
