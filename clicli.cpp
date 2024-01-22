@@ -121,9 +121,9 @@ void clicli::run() {
         Serial.print(myhvacontrol.getwatertemp());
         Serial.println("Degrees");
         Serial.print("Airtemp = ");
-        Serial.println(analogRead(A3));
+        Serial.println(myhvacontrol.getairtemp());
         Serial.print("RH = ");
-        Serial.println(analogRead(A2));
+        Serial.println(myhvacontrol.getRH());
         Serial.print("dew point = ");
         Serial.println(myhvacontrol.getdew_point());
         break;

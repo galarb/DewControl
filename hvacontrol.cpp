@@ -55,7 +55,7 @@ void hvacontrol::begin(double bdrate) {
   lcd.setBacklight(0);*/
   aLastState = digitalRead(_encoderPinA); //setup the last var of encoder
 
-  tft.init(240, 240, SPI_MODE2); 
+  tft.init(240, 320, SPI_MODE2); 
   tft.fillScreen(ST77XX_RED);
   tft.setRotation(2);     //to 90 deg
   tft.setTextSize(2); //1 is default 6x8, 2 is 12x16, 3 is 18x24
@@ -91,9 +91,11 @@ void hvacontrol::run(int kpp, int kii, int kdd){
   float pipetempSP = setpipetemp();//default dp+5, otherwise between dp and 50
   setValve(PIDcalc(pipetempPV, pipetempSP));//expexts values between 0..100
   if(checkButton()){
-    tftdatashow(getvalvestat(), map(analogRead(A3),0,1024,0,50), map(analogRead(A2),0,1024,0,50), getwatertemp());
+    //tftdatashow(getvalvestat(), getairtemp(), getRH(), getwatertemp());
   }
-  else{tftopershow(getdew_point(), setpipetemp());}
+  else{
+    //tftopershow(getdew_point(), setpipetemp());
+    }
 }
 
 float hvacontrol::setpipetemp(){ // returns the setpoint pipe temp
@@ -126,11 +128,7 @@ bool hvacontrol::checkButton(){
 }
 
 float hvacontrol::getdew_point(){
-  float airtemp = analogRead(AirTempPin);
-  airtemp = map(airtemp, 0 , 1024, 0, 50); //verify correct settings of jumpers in 22UTH-13 (S4 - closed, S5 - open)
-  float rh = analogRead(RHPin);
-  rh = map(rh, 0, 1024, 0, 100);
-  float dewpoint = airtemp - ((100 - rh) / 5);
+  float dewpoint = getairtemp() - ((100 - getRH()) / 5);
   return dewpoint;
 }
 float hvacontrol::getvalvestat(){
@@ -187,4 +185,12 @@ void hvacontrol::tftdatashow(float valve, float airtemp, float RH, float pipetem
    //Serial.println("Maintenance Mode");
 
 }
+float hvacontrol::getairtemp(){
+  float tempair = analogRead(AirTempPin);//verify correct settings of jumpers in 22UTH-13 (S4 - closed, S5 - open)
+  return map(tempair, 0, 1024, 0, 50);
+}
 
+float hvacontrol::getRH(){
+  float tempRH = analogRead(RHPin);
+  return map(tempRH, 0, 1024, 0, 100);
+}

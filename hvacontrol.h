@@ -21,6 +21,8 @@ class hvacontrol {
     float getdew_point();
     float getvalvestat();
     float getwatertemp();
+    float getairtemp();
+    float getRH(); 
     bool setValve(int valve);
     void tftwelcome();
     void tftopershow(float dp, float sp);
