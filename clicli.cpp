@@ -100,7 +100,7 @@ void clicli::run() {
         break;
        
        case 'a':
-        myhvacontrol.lcdswitch(command[1]);
+        
         break;
        
 

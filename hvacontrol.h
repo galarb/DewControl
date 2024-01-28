@@ -9,14 +9,14 @@
                 **************************************              */
 #ifndef HVACONTROL_H
 #define HVACONTROL_H
+#include <Arduino.h>
+#include "WString.h"
 
 class hvacontrol { 
 
   public:
     hvacontrol(int ecoderPinA, int ecoderPinB, int valvecontrolPin); 
     void begin(double bdrate);    
-    void ShowInfoLcd(int dp, int setdp);
-    void lcdswitch(bool status);
     void run(int kpp, int kii, int kdd);
     float getdew_point();
     float getvalvestat();
@@ -27,16 +27,15 @@ class hvacontrol {
     void tftwelcome();
     void tftopershow(float dp, float sp);
     void tftdatashow(float valve, float airtemp, float RH, float pipetemp);
-
+    void sdbegin();
+    void tftrun();
 
   private:
     float setpipetemp();
     bool checkButton();
-
     int _encoderPinA;
     int _encoderPinB;
     int _valvecontrolPin;
-
     double PIDcalc(double inp, int sp);
     unsigned long currentTime;
     unsigned long previousTime;
@@ -50,6 +49,4 @@ class hvacontrol {
     double kd = 0;
     bool  _onofsw;
 };
-
-
 #endif 
