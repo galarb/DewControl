@@ -249,6 +249,7 @@ void hvacontrol::run(int kpp, int kii, int kdd){
   else{
     //tftopershow(getdew_point(), setpipetemp());
     }
+  selftest();
 }
 
 float hvacontrol::setpipetemp(){ // returns the setpoint pipe temp
@@ -331,13 +332,18 @@ void hvacontrol::tftwelcome(){
   
 }
 void hvacontrol::tftopershow(float dp, float sp){ 
-//dp and sp values 0-50
-// Serial.println("Operation Mode");
+  //dp and sp values 0-50
+  // Serial.println("Operation Mode");
+  File entry = SD.open("oper.bmp");  // open SD card main root
+  bmpDraw(entry.name(), 0, 0);   // draw it
+  entry.close();  // close the file
 }
 void hvacontrol::tftdatashow(float valve, float airtemp, float RH, float pipetemp){
   //valve and RH in %, pipetemp and airtemp 0-50
    //Serial.println("Maintenance Mode");
-
+  File entry = SD.open("data.bmp");  // open SD card main root
+  bmpDraw(entry.name(), 0, 0);   // draw it
+  entry.close();  // close the file
 }
 float hvacontrol::getairtemp(){
   float tempair = analogRead(AirTempPin);//verify correct settings of jumpers in 22UTH-13 (S4 - closed, S5 - open)
@@ -377,4 +383,19 @@ void hvacontrol::sdbegin(){
           } 
       entry.close();  // close the file
      }    
+}
+void hvacontrol::selftest(){
+  //check all inputs for failure. 
+  //calls fault(x)//1 - valve, 2 - temp, 3 - RH, 4 - airTemp
+}
+void hvacontrol::fault(int x){
+  switch (x) {
+    case '1': //Set port to HIGH
+    //error message 1 , valve sensor disconnected
+    break;
+    case '2': //Set port to HIGH
+    //error message 2 , sensor temp
+    break;
+      //and so on
+  }    
 }

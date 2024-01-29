@@ -27,8 +27,10 @@ class hvacontrol {
     void tftwelcome();
     void tftopershow(float dp, float sp);
     void tftdatashow(float valve, float airtemp, float RH, float pipetemp);
+    void fault(int x);
     void sdbegin();
     void tftrun();
+    void selftest();
 
   private:
     float setpipetemp();
