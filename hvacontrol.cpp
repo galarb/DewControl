@@ -23,6 +23,8 @@ int ValveStatusPin=A0, WaterTempPin=A1, RHPin=A2, AirTempPin=A3;//sensors pins
 bool togsw = false;//button flag
 bool result; //button variable
 const int chipSelect = 10;//for SD Card
+bool mode; //heating 1, cooling 0
+float sp = 25; //setpoint for heating
 
 LiquidCrystal_I2C lcd(0x27,16,2);
 Adafruit_ST7789 tft = Adafruit_ST7789(9, 12, 11, 13);//CS, dc(MISO), MOSI, SCK
@@ -212,11 +214,51 @@ void hvacontrol::begin(double bdrate) {
   tft.setRotation(2);     //to 90 deg
   tft.setTextSize(2); //1 is default 6x8, 2 is 12x16, 3 is 18x24
   sdbegin();  
-  tftwelcome(); //welcome image
+  tftwelcome(); //welcome image for 1 min
   devmodebutton.begin();//required for button IRQ
   Serial.println("Setup finished");
+  checkmode();
 }
 
+bool hvacontrol::getdir(){
+  bool direction = 1;
+  aState = digitalRead(_encoderPinA); // Reads the "current" state of the outputA
+   // If the previous and the current state of the outputA are different, that means a Pulse has occured
+  if (aState != aLastState){     
+     // If the outputB state is different to the outputA state, that means the encoder is rotating clockwise
+     if (digitalRead(_encoderPinB) != aState) { //CW
+       direction = 1;
+     } 
+     else { //CCW
+       direction = 0;
+     }
+   } 
+  aLastState = aState; // Updates the previous state of the outputA with the current state
+  return direction;
+}
+
+bool hvacontrol::getevaldir(){//quitens down a spiky encoder
+  bool tempdir = getdir();
+  bool tempdir2 = getdir();
+  bool tempdir3 = getdir();
+  bool tempdir4 = getdir();
+  while (tempdir == 1 && tempdir == tempdir2 && tempdir2 == tempdir3 and tempdir3 == tempdir4){
+    return 1;
+  }
+  while (tempdir == 0 && tempdir == tempdir2 && tempdir2 == tempdir3 and tempdir3 == tempdir4){
+    return 0;
+  }
+}
+
+
+bool hvacontrol::checkmode(){
+  if(getevaldir()){//heating mode
+    mode = 1;//heating
+  }
+  else {
+    mode = 0;// cooling
+  }
+}
 double hvacontrol::PIDcalc(double inp, int sp){
   currentTime = millis();                //get current time
   elapsedTime = (double)(currentTime - previousTime)/1000; //compute time elapsed from previous computation (60ms approx). divide in 1000 to get in Sec
@@ -239,20 +281,35 @@ double hvacontrol::PIDcalc(double inp, int sp){
 }
 
 void hvacontrol::run(int kpp, int kii, int kdd){
-  float pipetempPV = getwatertemp();//a number between 0-50
-  float pipetempSP = setpipetemp();//default dp+5, otherwise between dp and 50
-  setValve(PIDcalc(pipetempPV, pipetempSP));//expexts values between 0..100
-  //tftrun();
-  if(checkButton()){
-    //tftdatashow(getvalvestat(), getairtemp(), getRH(), getwatertemp());
-  }
-  else{
-    //tftopershow(getdew_point(), setpipetemp());
+  if(mode == 1){//heating
+    float pipetempPV = getwatertemp();//a number between 0-50
+    float pipetempSP = setpipetempheat();//default dp+5, otherwise between dp and 50
+    setValve(PIDcalc(pipetempPV, pipetempSP));//expexts values between 0..100
+    //tftrun();
+    if(checkButton()){
+      //tftdatashow(getvalvestat(), getairtemp(), getRH(), getwatertemp());
     }
-  selftest();
+    else{
+      //tftopershow(getdew_point(), setpipetemp());
+      }
+    selftest();
+    }
+  else if(mode == 0){//cooling
+    float pipetempPV = getwatertemp();//a number between 0-50
+    float pipetempSP = setpipetempcool();//default dp+5, otherwise between dp and 50
+    setValve(PIDcalc(pipetempPV, pipetempSP));//expexts values between 0..100
+    //tftrun();
+    if(checkButton()){
+      //tftdatashow(getvalvestat(), getairtemp(), getRH(), getwatertemp());
+    }
+    else{
+      //tftopershow(getdew_point(), setpipetemp());
+      }
+    selftest();
+  }  
 }
 
-float hvacontrol::setpipetemp(){ // returns the setpoint pipe temp
+float hvacontrol::setpipetempcool(){ // returns the setpoint pipe temp
   aState = digitalRead(_encoderPinA); // Reads the "current" state of the outputA
    // If the previous and the current state of the outputA are different, that means a Pulse has occured
   if (aState != aLastState){     
@@ -271,6 +328,16 @@ float hvacontrol::setpipetemp(){ // returns the setpoint pipe temp
   float dpdelta = tempdpreading + setdelta;
   //ShowInfoLcd(tempdpreading, setdelta);
   return dpdelta;
+}
+
+float hvacontrol::setpipetempheat(){ // returns the setpoint pipe temp
+  if(getevaldir()){
+    sp = sp + 0.5;
+  }
+  else{
+  sp = sp - 0.5;
+  }
+  return sp;
 }
 
 bool hvacontrol::checkButton(){

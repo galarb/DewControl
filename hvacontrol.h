@@ -16,7 +16,8 @@ class hvacontrol {
 
   public:
     hvacontrol(int ecoderPinA, int ecoderPinB, int valvecontrolPin); 
-    void begin(double bdrate);    
+    void begin(double bdrate);
+    bool checkmode();
     void run(int kpp, int kii, int kdd);
     float getdew_point();
     float getvalvestat();
@@ -31,9 +32,12 @@ class hvacontrol {
     void sdbegin();
     void tftrun();
     void selftest();
+    bool getdir();
+    bool getevaldir();
 
   private:
-    float setpipetemp();
+    float setpipetempcool();
+    float setpipetempheat();
     bool checkButton();
     int _encoderPinA;
     int _encoderPinB;
