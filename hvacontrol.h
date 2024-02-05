@@ -9,8 +9,6 @@
                 **************************************              */
 #ifndef HVACONTROL_H
 #define HVACONTROL_H
-#include <Arduino.h>
-#include "WString.h"
 
 class hvacontrol { 
 

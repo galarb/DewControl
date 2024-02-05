@@ -13,14 +13,15 @@
 #include "hvacontrol.h"
 
 hvacontrol hvac(
-5, //encoder A
-6, //encoder B
-3); //valve control
+3, //encoder A
+4, //encoder B
+5); //valve control
 
 clicli mycli(hvac); //setup clicli tool for hvac control
 
 void setup() { 
   hvac.begin(115200);
+
 }
 
 void loop() { 

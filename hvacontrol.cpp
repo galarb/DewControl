@@ -1,14 +1,7 @@
-#include <avr/interrupt.h>
-#include "pins_arduino.h"
 #include "hvacontrol.h"
-#include "WString.h"
-#include "Stream.h"
 #include "HardwareSerial.h"
 #include <Arduino.h>
 #include <Wire.h>
-#include <Adafruit_NeoPixel.h>
-#include <LiquidCrystal_I2C.h>
-#include <Adafruit_NeoPixel.h>
 #include <SoftwareSerial.h>
 #include <Adafruit_GFX.h>    // Core graphics library
 #include <Adafruit_ST7789.h> // Hardware-specific library for ST7789
@@ -16,17 +9,16 @@
 #include <SD.h>
 #include "ButtonIRQ.h"
 
-int aState, aLastState; //encoder state variables
-bool devMode = false; //a flag to control graphics
+bool aState, aLastState; //encoder state variables
+//bool devMode = false; //a flag to control graphics
 int setdelta = 5, maxdelta = 50; //default 5 above the calculated dp
-int ValveStatusPin=A0, WaterTempPin=A1, RHPin=A2, AirTempPin=A3;//sensors pins
-bool togsw = false;//button flag
-bool result; //button variable
-const int chipSelect = 10;//for SD Card
-bool mode; //heating 1, cooling 0
+static int ValveStatusPin=A0, WaterTempPin=A1, RHPin=A2, AirTempPin=A3;//sensors pins
+volatile bool togsw = false;//button flag
+volatile  bool result; //button variable
+volatile bool mode; //heating 1, cooling 0
 float sp = 25; //setpoint for heating
+volatile bool direction = 1;
 
-LiquidCrystal_I2C lcd(0x27,16,2);
 Adafruit_ST7789 tft = Adafruit_ST7789(9, 12, 11, 13);//CS, dc(MISO), MOSI, SCK
 //9(CS), 11(COPI), 12(CIPO), 13(SCK)
 ButtonIRQ devmodebutton(2); //initiate IRQ Button
@@ -221,7 +213,6 @@ void hvacontrol::begin(double bdrate) {
 }
 
 bool hvacontrol::getdir(){
-  bool direction = 1;
   aState = digitalRead(_encoderPinA); // Reads the "current" state of the outputA
    // If the previous and the current state of the outputA are different, that means a Pulse has occured
   if (aState != aLastState){     
@@ -243,10 +234,10 @@ bool hvacontrol::getevaldir(){//quitens down a spiky encoder
   bool tempdir3 = getdir();
   bool tempdir4 = getdir();
   while (tempdir == 1 && tempdir == tempdir2 && tempdir2 == tempdir3 and tempdir3 == tempdir4){
-    return 1;
+    return true;
   }
   while (tempdir == 0 && tempdir == tempdir2 && tempdir2 == tempdir3 and tempdir3 == tempdir4){
-    return 0;
+    return false;
   }
 }
 
@@ -258,6 +249,9 @@ bool hvacontrol::checkmode(){
   else {
     mode = 0;// cooling
   }
+ // if(digitalRead(2)){while(1);}
+  Serial.print("mode  = "); Serial.println(mode);
+  return mode;
 }
 double hvacontrol::PIDcalc(double inp, int sp){
   currentTime = millis();                //get current time
@@ -288,10 +282,12 @@ void hvacontrol::run(int kpp, int kii, int kdd){
     //tftrun();
     if(checkButton()){
       //tftdatashow(getvalvestat(), getairtemp(), getRH(), getwatertemp());
+     // Serial.println("Datashow");
     }
     else{
       //tftopershow(getdew_point(), setpipetemp());
-      }
+      //Serial.println("opershow");
+    }
     selftest();
     }
   else if(mode == 0){//cooling
@@ -432,7 +428,7 @@ void hvacontrol::sdbegin(){
     Serial.println("* is a card inserted?");
     Serial.println("* is your wiring correct?");
     Serial.println("* did you change the chipSelect pin to match your shield or module?");
-    while (1);
+    //while (1);
   } else {
       Serial.println("Wiring is correct and a card is present.");
       delay(50); 
@@ -442,12 +438,12 @@ void hvacontrol::sdbegin(){
 
       File entry = SD.open("wlcm.bmp");  // open SD card 
 
-      uint8_t nameSize = String(entry.name()).length();  // get file name size
-      String str1 = String(entry.name()).substring( nameSize - 4 );  // save the last 4 characters (file extension)
-      if (str1.equalsIgnoreCase(".bmp")){  // if the file has '.bmp' extension
+     // uint8_t nameSize = String(entry.name()).length();  // get file name size
+      //String str1 = String(entry.name()).substring( nameSize - 4 );  // save the last 4 characters (file extension)
+      //if (str1.equalsIgnoreCase(".bmp")){  // if the file has '.bmp' extension
           Serial.println("Drawing!");
          // bmpDraw(entry.name(), 0, 0);   // draw it
-          } 
+        //  } 
       entry.close();  // close the file
      }    
 }
