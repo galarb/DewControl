@@ -1,3 +1,4 @@
+#include "Adafruit_ST77xx.h"
 #include "hvacontrol.h"
 #include "HardwareSerial.h"
 #include <Arduino.h>
@@ -13,13 +14,13 @@ bool aState, aLastState; //encoder state variables
 //bool devMode = false; //a flag to control graphics
 int setdelta = 5, maxdelta = 50; //default 5 above the calculated dp
 static int ValveStatusPin=A0, WaterTempPin=A1, RHPin=A2, AirTempPin=A3;//sensors pins
-volatile bool togsw = false;//button flag
-volatile  bool result; //button variable
-volatile bool mode; //heating 1, cooling 0
+bool togsw = false;//button flag
+bool result; //button variable
+bool mode; //heating 1, cooling 0
 float sp = 25; //setpoint for heating
-volatile bool direction = 1;
+bool direction = 1;
 
-Adafruit_ST7789 tft = Adafruit_ST7789(9, 12, 11, 13);//CS, dc(MISO), MOSI, SCK
+Adafruit_ST7789 tft = Adafruit_ST7789(9, 8, 7);//CS, dc(MISO), MOSI, SCK
 //9(CS), 11(COPI), 12(CIPO), 13(SCK)
 ButtonIRQ devmodebutton(2); //initiate IRQ Button
 
@@ -136,7 +137,7 @@ void bmpDraw(char *filename, uint8_t x, uint16_t y) {
  
           // Seek to start of scan line.  It might seem labor-
           // intensive to be doing this on every line, but this
- // method covers a lot of gritty details like cropping
+          // method covers a lot of gritty details like cropping
           // and scanline padding.  Also, the seek only takes
           // place if the file position actually needs to change
           // (avoids a lot of cluster math in SD library).
@@ -155,7 +156,7 @@ void bmpDraw(char *filename, uint8_t x, uint16_t y) {
             if (buffidx >= sizeof(sdbuffer)) { // Indeed
               bmpFile.read(sdbuffer, sizeof(sdbuffer));
               buffidx = 0; // Set index to beginning
- tft.startWrite();
+              tft.startWrite();
             }
  
             // Convert pixel from BMP to TFT format, push to display
@@ -201,9 +202,9 @@ void hvacontrol::begin(double bdrate) {
   
   aLastState = digitalRead(_encoderPinA); //setup the last var of encoder
 
-  tft.init(240, 320, SPI_MODE2); 
+  tft.init(240, 320); 
   tft.fillScreen(ST77XX_RED);
-  tft.setRotation(2);     //to 90 deg
+  tft.setRotation(1);     //to 90 deg
   tft.setTextSize(2); //1 is default 6x8, 2 is 12x16, 3 is 18x24
   sdbegin();  
   tftwelcome(); //welcome image for 1 min
@@ -240,7 +241,6 @@ bool hvacontrol::getevaldir(){//quitens down a spiky encoder
     return false;
   }
 }
-
 
 bool hvacontrol::checkmode(){
   if(getevaldir()){//heating mode
@@ -283,26 +283,21 @@ void hvacontrol::run(int kpp, int kii, int kdd){
     if(checkButton()){
       //tftdatashow(getvalvestat(), getairtemp(), getRH(), getwatertemp());
      // Serial.println("Datashow");
-    }
+     }
     else{
       //tftopershow(getdew_point(), setpipetemp());
       //Serial.println("opershow");
     }
     selftest();
-    }
-  else if(mode == 0){//cooling
-    float pipetempPV = getwatertemp();//a number between 0-50
-    float pipetempSP = setpipetempcool();//default dp+5, otherwise between dp and 50
-    setValve(PIDcalc(pipetempPV, pipetempSP));//expexts values between 0..100
-    //tftrun();
-    if(checkButton()){
-      //tftdatashow(getvalvestat(), getairtemp(), getRH(), getwatertemp());
-    }
-    else{
-      //tftopershow(getdew_point(), setpipetemp());
-      }
-    selftest();
-  }  
+  }
+  //File entry = SD.open("225termi.bmp");  // open SD card main root
+    //bmpDraw("225termi.bmp", 0, 0);   // draw it 
+    //delay(1500);
+
+  File entry = SD.open("225termi.bmp");   
+    bmpDraw("225termi.bmp", 0, 0);
+  entry.close();  // close the file
+  delay(1500);
 }
 
 float hvacontrol::setpipetempcool(){ // returns the setpoint pipe temp
@@ -371,29 +366,13 @@ bool hvacontrol::setValve(int valve){//0..100
   else return 1;
 }
 void hvacontrol::tftwelcome(){ 
-  //a nice greeting screen}
- /* File entry = SD.open("/WLCM.BMP");  // open SD card main root
-  printDirectory(entry, 0);
-  uint8_t nameSize = String(entry.name()).length();  // get file name size
-  String str1 = String(entry.name()).substring( nameSize - 4 );  // save the last 4 characters (file extension)
-  if ( str1.equalsIgnoreCase(".bmp")){  // if the file has '.bmp' extension
-      Serial.println("Drawing!");
-      //bmpDraw(entry.name(), 0, 0);   // draw it
-      } 
-  if(entry.name()=="WLCM.BMP"){
-    Serial.println("found welcome screen");
-  }    
+  //a nice greeting screen
+  File entry = SD.open("225termi.bmp");  // open SD card main root
+   // bmpDraw("225termi.bmp", 0, 0);   // draw it    
   entry.close();  // close the file
-*/
-  File root = SD.open("/");  // open SD card main root
-  printDirectory(root, 0);   // print all files names and sizes
-  root.close();              // close the opened root
-
-  delay(500);
-
- // tft.drawRGBBitmap(0, 0, image_array1, 120, 120);
-  
+  delay(1500);
 }
+
 void hvacontrol::tftopershow(float dp, float sp){ 
   //dp and sp values 0-50
   // Serial.println("Operation Mode");
@@ -427,25 +406,12 @@ void hvacontrol::sdbegin(){
     Serial.println("initialization failed. Things to check:");
     Serial.println("* is a card inserted?");
     Serial.println("* is your wiring correct?");
-    Serial.println("* did you change the chipSelect pin to match your shield or module?");
-    //while (1);
+    Serial.println("* did you change the chipSelect pin to match your module?");
+    while (1);
   } else {
       Serial.println("Wiring is correct and a card is present.");
       delay(50); 
-      if(SD.exists("wlcm.bmp")){
-        Serial.println("wlcm.bmp EXISTS on SD card!!!");
-        }
-
-      File entry = SD.open("wlcm.bmp");  // open SD card 
-
-     // uint8_t nameSize = String(entry.name()).length();  // get file name size
-      //String str1 = String(entry.name()).substring( nameSize - 4 );  // save the last 4 characters (file extension)
-      //if (str1.equalsIgnoreCase(".bmp")){  // if the file has '.bmp' extension
-          Serial.println("Drawing!");
-         // bmpDraw(entry.name(), 0, 0);   // draw it
-        //  } 
-      entry.close();  // close the file
-     }    
+      }    
 }
 void hvacontrol::selftest(){
   //check all inputs for failure. 
