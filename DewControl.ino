@@ -26,5 +26,5 @@ void setup() {
 
 void loop() { 
   mycli.run();
-  hvac.run(1, 0, 0);
+  hvac.run(0.5, 0, 0);
 }

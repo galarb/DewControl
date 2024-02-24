@@ -19,7 +19,7 @@ bool result; //button variable
 bool mode; //heating 1, cooling 0
 float sp = 25; //setpoint for heating
 bool direction = 1;
-
+float Vmin = 200; //part of 1024 of analog read.
 Adafruit_ST7789 tft = Adafruit_ST7789(9, 8, 7);//CS, dc(MISO), MOSI, SCK
 //9(CS), 11(COPI), 12(CIPO), 13(SCK)
 ButtonIRQ devmodebutton(2); //initiate IRQ Button
@@ -202,15 +202,22 @@ void hvacontrol::begin(double bdrate) {
   
   aLastState = digitalRead(_encoderPinA); //setup the last var of encoder
 
-  tft.init(240, 320); 
-  tft.fillScreen(ST77XX_RED);
-  tft.setRotation(1);     //to 90 deg
-  tft.setTextSize(2); //1 is default 6x8, 2 is 12x16, 3 is 18x24
-  sdbegin();  
-  tftwelcome(); //welcome image for 1 min
+  //tft.init(240, 320); 
+  //tft.fillScreen(ST77XX_RED);
+  //tft.setRotation(1);     //to 90 deg
+  //tft.setTextSize(2); //1 is default 6x8, 2 is 12x16, 3 is 18x24
+  //sdbegin();  
+  //tftwelcome(); //welcome image for 1 min
   devmodebutton.begin();//required for button IRQ
   Serial.println("Setup finished");
   checkmode();
+}
+
+bool hvacontrol::encoderchange(){
+  aState = digitalRead(_encoderPinA); // Reads the "current" state of the outputA
+   // If the previous and the current state of the outputA are different, that means a Pulse has occured
+  if (aState != aLastState){return true;} 
+  else{ return false;} 
 }
 
 bool hvacontrol::getdir(){
@@ -258,7 +265,7 @@ double hvacontrol::PIDcalc(double inp, int sp){
   elapsedTime = (double)(currentTime - previousTime)/1000; //compute time elapsed from previous computation (60ms approx). divide in 1000 to get in Sec
   //Serial.print(currentTime); //for serial plotter
   //Serial.println("\t"); //for serial plotter
-  error = sp - inp;                                  // determine error
+  error = sp - inp;              // determine error
   cumError += error * elapsedTime;                   // compute integral
   rateError = (error - lastError)/elapsedTime;       // compute derivative deltaError/deltaTime
   if(rateError > 0.3 || rateError < -0.3){cumError = 0;}             // reset the Integral commulator when Proportional is doing the work
@@ -270,34 +277,44 @@ double hvacontrol::PIDcalc(double inp, int sp){
   if(out > 254){out = 254;}    //limit the function for smoother operation
   if(out < -254){out = -254;}
   if(cumError > 255 || cumError < -255){cumError = 0; out = 0;} // reset the Integral commulator
-  return out;                                        //the function returns the PID output value 
-  
+  Serial.println(out);
+  return out;    //the function returns the PID output value 
 }
 
-void hvacontrol::run(int kpp, int kii, int kdd){
+void hvacontrol::run(float kpp, float kii, float kdd){
+  kp = kpp;
+  ki = kii;
+  kd = kdd;
   if(mode == 1){//heating
-    float pipetempPV = getwatertemp();//a number between 0-50
-    float pipetempSP = setpipetempheat();//default dp+5, otherwise between dp and 50
-    setValve(PIDcalc(pipetempPV, pipetempSP));//expexts values between 0..100
-    //tftrun();
-    if(checkButton()){
-      //tftdatashow(getvalvestat(), getairtemp(), getRH(), getwatertemp());
-     // Serial.println("Datashow");
+    
+  }
+  else { //cooling
+  if(encoderchange()){
+      float pipetempPV = getwatertemp();//a number between 0-50
+      float pipetempSP = setpipetempcool();//default dp+5, otherwise between dp and 50
+      int ValveValue = map(PIDcalc(pipetempPV, pipetempSP), 0, 50, 0, 100);
+      Serial.print("pipetempPV = "); Serial.println(pipetempPV); 
+      Serial.print("pipetempSP = "); Serial.println(pipetempSP); delay(2000);
+      setValve(ValveValue);//expexts values between 0..100
+      //tftrun();
+      if(checkButton()){
+        //tftdatashow(getvalvestat(), getairtemp(), getRH(), getwatertemp());
+      // Serial.println("Datashow");
+      }
+      else{
+        //tftopershow(getdew_point(), setpipetemp());
+        //Serial.println("opershow");
+      }
+    } else {
+            int ValveValue = map(PIDcalc(getwatertemp(), 15), 0, 50, 0, 100);
+            setValve(ValveValue);
      }
-    else{
-      //tftopershow(getdew_point(), setpipetemp());
-      //Serial.println("opershow");
-    }
     selftest();
+
   }
   //File entry = SD.open("225termi.bmp");  // open SD card main root
     //bmpDraw("225termi.bmp", 0, 0);   // draw it 
     //delay(1500);
-
-  File entry = SD.open("225termi.bmp");   
-    bmpDraw("225termi.bmp", 0, 0);
-  entry.close();  // close the file
-  delay(1500);
 }
 
 float hvacontrol::setpipetempcool(){ // returns the setpoint pipe temp
@@ -326,7 +343,7 @@ float hvacontrol::setpipetempheat(){ // returns the setpoint pipe temp
     sp = sp + 0.5;
   }
   else{
-  sp = sp - 0.5;
+    sp = sp - 0.5;
   }
   return sp;
 }
@@ -356,10 +373,11 @@ float hvacontrol::getwatertemp(){
 }
 
 bool hvacontrol::setValve(int valve){//0..100
-  int valveposition = map(valve, 0, 100, 0, 254);
-  analogWrite(_valvecontrolPin, valve);
+  int valvecommand = map(valve, 0, 100, 0, 254);
+  if(valvecommand > 254){valvecommand = 254;}
+  analogWrite(_valvecontrolPin, valvecommand);
+  Serial.print("valve command = ");Serial.println(valvecommand); delay(2000);
   int valvestatus = getvalvestat();
-  valvestatus = map(valvestatus, 0 , 1024, 0, 100);
   if (valvestatus < valve){//check if valve got to the new position
     return 0;
   }
@@ -416,15 +434,40 @@ void hvacontrol::sdbegin(){
 void hvacontrol::selftest(){
   //check all inputs for failure. 
   //calls fault(x)//1 - valve, 2 - temp, 3 - RH, 4 - airTemp
+  float valvestat = analogRead(ValveStatusPin);
+  float valvestat2 = analogRead(ValveStatusPin);
+  if(valvestat  < Vmin &&  valvestat2 < Vmin){
+    fault(1);
+  }
+  float PipeTemp = analogRead(WaterTempPin);
+  float PipeTemp2 = analogRead(WaterTempPin);
+  if(PipeTemp  < Vmin &&  PipeTemp2 < Vmin){
+    fault(2);
+  }
+  float RH = analogRead(RHPin);
+  float RH2 = analogRead(RHPin);
+  if(RH  < Vmin &&  RH2 < Vmin){
+    fault(3);
+  }
+  float AirTemp = analogRead(AirTempPin);
+  float AirTemp2 = analogRead(AirTempPin);
+  if(AirTemp  < Vmin &&  AirTemp2 < Vmin){
+    fault(4);
+  }  
 }
 void hvacontrol::fault(int x){
   switch (x) {
-    case '1': //Set port to HIGH
-    //error message 1 , valve sensor disconnected
+    case '1': //error message 1 , valve sensor disconnected
+      Serial.println("valve status sensor disconnected!");
     break;
-    case '2': //Set port to HIGH
-    //error message 2 , sensor temp
+    case '2': //error message 2 , sensor temp
+      Serial.println("pipe temp sensor disconnected!");
     break;
-      //and so on
+    case '3': //error message 3 - RH
+      Serial.println("RH sensor disconnected!");
+    break;
+    case '4': //error message 4 - airTemp
+      Serial.println("air temp sensor disconnected!");
+    break;
   }    
 }
