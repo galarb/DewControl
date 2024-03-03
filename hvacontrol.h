@@ -29,10 +29,12 @@ class hvacontrol {
     void fault(int x);
     void sdbegin();
     void tftrun();
-    void selftest();
+    bool selftest();
     bool getdir();
     bool getevaldir();
     bool encoderchange();
+    void tftfault(int x);
+
 
   private:
     float setpipetempcool();

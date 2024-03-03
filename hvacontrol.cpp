@@ -1,9 +1,10 @@
+#include <math.h>
 #include "Adafruit_ST77xx.h"
 #include "hvacontrol.h"
 #include "HardwareSerial.h"
 #include <Arduino.h>
 #include <Wire.h>
-#include <SoftwareSerial.h>
+#include <SoftwareSerial.h> 
 #include <Adafruit_GFX.h>    // Core graphics library
 #include <Adafruit_ST7789.h> // Hardware-specific library for ST7789
 #include <SPI.h>
@@ -12,8 +13,8 @@
 
 bool aState, aLastState; //encoder state variables
 //bool devMode = false; //a flag to control graphics
-int setdelta = 5, maxdelta = 50; //default 5 above the calculated dp
-static int ValveStatusPin=A0, WaterTempPin=A1, RHPin=A2, AirTempPin=A3;//sensors pins
+float setdelta = 5, maxdelta = 50; //default 5 above the calculated dp
+static int ValveStatusPin=A0, WaterTempPin=A1, RHPin=A2, AirTempPin=A3, PotenPin=A4;//sensors pins
 bool togsw = false;//button flag
 bool result; //button variable
 bool mode; //heating 1, cooling 0
@@ -22,6 +23,13 @@ bool direction = 1;
 float Vmin = 200; //part of 1024 of analog read.
 Adafruit_ST7789 tft = Adafruit_ST7789(9, 8, 7);//CS, dc(MISO), MOSI, SCK
 //9(CS), 11(COPI), 12(CIPO), 13(SCK)
+//(int8_t cs, int8_t dc, int8_t rst);
+/*reset 7 - blue(purple)
+DC 8 - yellow(black)
+CS 9 - green(black)
+clk 13 - yellow
+Mosi 11 - green
+miso 12 - blue(gray)*/
 ButtonIRQ devmodebutton(2); //initiate IRQ Button
 
 
@@ -202,22 +210,24 @@ void hvacontrol::begin(double bdrate) {
   
   aLastState = digitalRead(_encoderPinA); //setup the last var of encoder
 
-  //tft.init(240, 320); 
-  //tft.fillScreen(ST77XX_RED);
-  //tft.setRotation(1);     //to 90 deg
-  //tft.setTextSize(2); //1 is default 6x8, 2 is 12x16, 3 is 18x24
+  tft.init(240, 320); 
+  tft.setRotation(1);     //to 90 deg
+  tft.setTextSize(2); //1 is default 6x8, 2 is 12x16, 3 is 18x24
   //sdbegin();  
-  //tftwelcome(); //welcome image for 1 min
+  tftwelcome(); //welcome image for 1 min
+  checkmode();
   devmodebutton.begin();//required for button IRQ
   Serial.println("Setup finished");
-  checkmode();
 }
 
 bool hvacontrol::encoderchange(){
   aState = digitalRead(_encoderPinA); // Reads the "current" state of the outputA
    // If the previous and the current state of the outputA are different, that means a Pulse has occured
-  if (aState != aLastState){return true;} 
-  else{ return false;} 
+  if (aState != aLastState){
+    aLastState = aState;
+    return true;} 
+  else{  
+    return false;} 
 }
 
 bool hvacontrol::getdir(){
@@ -250,14 +260,43 @@ bool hvacontrol::getevaldir(){//quitens down a spiky encoder
 }
 
 bool hvacontrol::checkmode(){
-  if(getevaldir()){//heating mode
-    mode = 1;//heating
+  double t = 0;
+  pinMode(2, INPUT_PULLUP);
+  for (int c = 10; c > 0; c--){
+    Serial.print(c);
+    tft.setTextColor(ST77XX_MAGENTA);//...green 
+    tft.setTextSize(3); //1 is default 6x8, 2 is 12x16, 3 is 18x24
+    tft.setCursor(50, 5);
+    tft.write("CHOOSE MODE");
+    tft.setTextSize(3); //1 is default 6x8, 2 is 12x16, 3 is 18x24
+    tft.setCursor(10, 120);
+    tft.print(c);   
+    tft.setCursor(80, 120);
+    tft.write("Seconds left");
+    
+    Serial.println(" sec left!");
+    if (mode == 1){ //hot mode
+      Serial.println("Hot mode");
+      tft.setTextColor(ST77XX_CYAN);//...red 
+      tft.setCursor(40, 180);
+      tft.write("Hot mode");
+    }
+    else{ //cold mode
+      Serial.println("Cold mode");
+      tft.setTextColor(ST77XX_YELLOW);//...blue
+      tft.setCursor(40, 180);
+      tft.write("Cold mode");
+    }
+    while (t < 1000){
+      t++;
+      delay(1);
+      if (digitalRead(2) == 0){
+        mode = !mode;
+      }
+    }
+    t = 0;
+    tft.fillScreen(ST77XX_WHITE);//..black
   }
-  else {
-    mode = 0;// cooling
-  }
- // if(digitalRead(2)){while(1);}
-  Serial.print("mode  = "); Serial.println(mode);
   return mode;
 }
 double hvacontrol::PIDcalc(double inp, int sp){
@@ -277,7 +316,7 @@ double hvacontrol::PIDcalc(double inp, int sp){
   if(out > 254){out = 254;}    //limit the function for smoother operation
   if(out < -254){out = -254;}
   if(cumError > 255 || cumError < -255){cumError = 0; out = 0;} // reset the Integral commulator
-  Serial.println(out);
+  //Serial.println(out);
   return out;    //the function returns the PID output value 
 }
 
@@ -289,52 +328,50 @@ void hvacontrol::run(float kpp, float kii, float kdd){
     
   }
   else { //cooling
-  if(encoderchange()){
+    //if(encoderchange()){
       float pipetempPV = getwatertemp();//a number between 0-50
       float pipetempSP = setpipetempcool();//default dp+5, otherwise between dp and 50
       int ValveValue = map(PIDcalc(pipetempPV, pipetempSP), 0, 50, 0, 100);
-      Serial.print("pipetempPV = "); Serial.println(pipetempPV); 
-      Serial.print("pipetempSP = "); Serial.println(pipetempSP); delay(2000);
+      //Serial.print("pipetempPV = "); Serial.println(pipetempPV); 
+      //Serial.print("pipetempSP = "); Serial.println(pipetempSP); //delay(2000);
       setValve(ValveValue);//expexts values between 0..100
-      //tftrun();
-      if(checkButton()){
-        //tftdatashow(getvalvestat(), getairtemp(), getRH(), getwatertemp());
-      // Serial.println("Datashow");
+      
+   // } else {
+     //       int ValveValue = map(PIDcalc(getwatertemp(), 15), 0, 50, 0, 100);
+       //     setValve(ValveValue);
+     //}
+    if(checkButton()){
+        if(!selftest()){
+          tftdatashow(getvalvestat(), getairtemp(), getRH(), getwatertemp());
+        }
       }
       else{
-        //tftopershow(getdew_point(), setpipetemp());
-        //Serial.println("opershow");
+        tftopershow(getdew_point(), setpipetempcool());
       }
-    } else {
-            int ValveValue = map(PIDcalc(getwatertemp(), 15), 0, 50, 0, 100);
-            setValve(ValveValue);
-     }
-    selftest();
 
   }
-  //File entry = SD.open("225termi.bmp");  // open SD card main root
-    //bmpDraw("225termi.bmp", 0, 0);   // draw it 
-    //delay(1500);
 }
 
 float hvacontrol::setpipetempcool(){ // returns the setpoint pipe temp
-  aState = digitalRead(_encoderPinA); // Reads the "current" state of the outputA
+  /*aState = digitalRead(_encoderPinA); // Reads the "current" state of the outputA
    // If the previous and the current state of the outputA are different, that means a Pulse has occured
   if (aState != aLastState){     
      // If the outputB state is different to the outputA state, that means the encoder is rotating clockwise
      if (digitalRead(_encoderPinB) != aState) { 
       if (setdelta < maxdelta){
-       setdelta = setdelta + 0.1;
+       setdelta = setdelta + 1;
       }
-     } 
-     else if (setdelta > 0){
-       setdelta = setdelta - 0.1;
+     } else {
+        //if (setdelta > 0){
+          setdelta = setdelta - 1;
+       // }
      }
    } 
-  aLastState = aState; // Updates the previous state of the outputA with the current state
+  aLastState = aState; // Updates the previous state of the outputA with the current state*/
   float tempdpreading = getdew_point();
-  float dpdelta = tempdpreading + setdelta;
-  //ShowInfoLcd(tempdpreading, setdelta);
+  float poten = map(analogRead(PotenPin), 0, 1023, 0, 15);
+  float dpdelta = tempdpreading + poten;
+  //Serial.print("setdelta   = "); Serial.println(setdelta);//XX
   return dpdelta;
 }
 
@@ -352,12 +389,16 @@ bool hvacontrol::checkButton(){
   result = devmodebutton.isTrue();
   if(result){
     togsw = !togsw;
+    tft.fillScreen(ST77XX_WHITE);//...black
+
   }
   return togsw;
 }
 
 float hvacontrol::getdew_point(){
   float dewpoint = getairtemp() - ((100 - getRH()) / 5);
+  //Serial.print("dewpoint = ");Serial.println(dewpoint);//XX
+
   return dewpoint;
 }
 float hvacontrol::getvalvestat(){
@@ -376,34 +417,91 @@ bool hvacontrol::setValve(int valve){//0..100
   int valvecommand = map(valve, 0, 100, 0, 254);
   if(valvecommand > 254){valvecommand = 254;}
   analogWrite(_valvecontrolPin, valvecommand);
-  Serial.print("valve command = ");Serial.println(valvecommand); delay(2000);
+  //Serial.print("valve command = ");Serial.println(valvecommand); delay(2000);
   int valvestatus = getvalvestat();
   if (valvestatus < valve){//check if valve got to the new position
     return 0;
   }
   else return 1;
 }
+#define BMP_IMAGE_PATH "/225termi.bmp"
+
 void hvacontrol::tftwelcome(){ 
   //a nice greeting screen
-  File entry = SD.open("225termi.bmp");  // open SD card main root
-   // bmpDraw("225termi.bmp", 0, 0);   // draw it    
-  entry.close();  // close the file
-  delay(1500);
-}
+  //File entry = SD.open(BMP_IMAGE_PATH);  // open SD card main root
+    //bmpDraw(BMP_IMAGE_PATH, 0, 0);   // draw it    
+  ///entry.close();  // close the file
+  //delay(2500);
+  tft.fillScreen(ST77XX_WHITE);//...black
 
-void hvacontrol::tftopershow(float dp, float sp){ 
-  //dp and sp values 0-50
-  // Serial.println("Operation Mode");
-  File entry = SD.open("oper.bmp");  // open SD card main root
-  bmpDraw(entry.name(), 0, 0);   // draw it
-  entry.close();  // close the file
+  tft.setTextColor(ST77XX_BLACK);
+  tft.println("Welcome to HVAC control!");
+  tft.println("powered by NTG Solutions");
+  delay(1000);
+  tft.fillScreen(ST77XX_WHITE);//...black
 }
 void hvacontrol::tftdatashow(float valve, float airtemp, float RH, float pipetemp){
-  //valve and RH in %, pipetemp and airtemp 0-50
-   //Serial.println("Maintenance Mode");
-  File entry = SD.open("data.bmp");  // open SD card main root
-  bmpDraw(entry.name(), 0, 0);   // draw it
-  entry.close();  // close the file
+  tft.setCursor(50, 10);
+  //tft.setTextColor(ST77XX_CYAN);//...red 
+  //tft.setTextColor(ST77XX_MAGENTA);//...green 
+  tft.setTextColor(ST77XX_YELLOW);//...blue
+  tft.setTextSize(3); //1 is default 6x8, 2 is 12x16, 3 is 18x24
+  tft.write("HVAC CONTROL");
+  tft.setTextSize(2); //1 is default 6x8, 2 is 12x16, 3 is 18x24
+  tft.setTextColor(ST77XX_BLACK);//...white
+  tft.setCursor(5, 38);
+  tft.write("Valve Status");
+  tft.fillRoundRect(250, 38, 90, 18, 1, ST77XX_WHITE);
+  tft.fillRoundRect(250, 84, 100, 18, 1, ST77XX_WHITE);
+  tft.fillRoundRect(250, 129, 90, 18, 1, ST77XX_WHITE);
+  tft.fillRoundRect(250, 175, 100, 18, 1, ST77XX_WHITE);
+  
+  tft.setCursor(250, 38);
+  tft.print(valve);
+  tft.setCursor(5, 83);
+  tft.write("Air Temp");
+  tft.setCursor(250, 83);
+  tft.print(airtemp);
+  tft.setCursor(5, 129);
+  tft.write("RH");
+  tft.setCursor(250, 129);
+  tft.print(RH);
+  tft.setCursor(5, 175);
+  tft.write("Pipe Temp");
+  tft.setCursor(250, 175);
+  tft.print(pipetemp);
+
+  tft.drawFastHLine(0, 56, 310, ST77XX_BLACK);
+  tft.drawFastHLine(0, 102, 310, ST77XX_BLACK);
+  tft.drawFastHLine(0, 148, 310, ST77XX_BLACK);
+  tft.drawFastHLine(0, 194, 310, ST77XX_BLACK);
+  
+  tft.drawFastVLine(180, 35, 200, ST77XX_BLACK);
+}
+void hvacontrol::tftopershow(float dp, float sp){
+  tft.setCursor(50, 10);
+  //tft.setTextColor(ST77XX_CYAN);//...red 
+  //tft.setTextColor(ST77XX_MAGENTA);//...green 
+  tft.setTextColor(ST77XX_ORANGE);//... 
+ // tft.setTextColor(ST77XX_YELLOW);//...blue
+  tft.setTextSize(3); //1 is default 6x8, 2 is 12x16, 3 is 18x24
+  tft.write("HVAC CONTROL");
+  tft.setCursor(5, 70);
+  tft.setTextSize(2); //1 is default 6x8, 2 is 12x16, 3 is 18x24
+  tft.setTextColor(ST77XX_BLACK);//...white
+  tft.write("Set Point");
+  tft.setCursor(5, 140);
+  tft.write("Dew Point");
+  tft.setCursor(220, 70);
+  tft.fillRoundRect(220, 70, 90, 20, 1, ST77XX_WHITE);
+  tft.fillRoundRect(220, 140, 100, 20, 1, ST77XX_WHITE);
+  tft.print(sp);
+  tft.setCursor(220, 140);
+  tft.print(dp);
+  
+  tft.drawFastHLine(0, 110, 310, ST77XX_BLACK);
+  tft.drawFastVLine(180, 60, 100, ST77XX_BLACK);
+  delay(200);
 }
 float hvacontrol::getairtemp(){
   float tempair = analogRead(AirTempPin);//verify correct settings of jumpers in 22UTH-13 (S4 - closed, S5 - open)
@@ -431,43 +529,66 @@ void hvacontrol::sdbegin(){
       delay(50); 
       }    
 }
-void hvacontrol::selftest(){
+bool hvacontrol::selftest(){
   //check all inputs for failure. 
   //calls fault(x)//1 - valve, 2 - temp, 3 - RH, 4 - airTemp
   float valvestat = analogRead(ValveStatusPin);
   float valvestat2 = analogRead(ValveStatusPin);
   if(valvestat  < Vmin &&  valvestat2 < Vmin){
     fault(1);
+    return false;
   }
   float PipeTemp = analogRead(WaterTempPin);
   float PipeTemp2 = analogRead(WaterTempPin);
   if(PipeTemp  < Vmin &&  PipeTemp2 < Vmin){
     fault(2);
+    return true;
+
   }
   float RH = analogRead(RHPin);
   float RH2 = analogRead(RHPin);
   if(RH  < Vmin &&  RH2 < Vmin){
     fault(3);
+    return true;
   }
   float AirTemp = analogRead(AirTempPin);
   float AirTemp2 = analogRead(AirTempPin);
   if(AirTemp  < Vmin &&  AirTemp2 < Vmin){
     fault(4);
+    return true;
   }  
+  return false;
 }
 void hvacontrol::fault(int x){
+  //Serial.print("x = "); Serial.println(x);
+
   switch (x) {
-    case '1': //error message 1 , valve sensor disconnected
+    case 1: //error message 1 , valve sensor disconnected
       Serial.println("valve status sensor disconnected!");
+     // tftfault(1);
     break;
-    case '2': //error message 2 , sensor temp
+    case 2: //error message 2 , sensor temp
       Serial.println("pipe temp sensor disconnected!");
     break;
-    case '3': //error message 3 - RH
+    case 3: //error message 3 - RH
       Serial.println("RH sensor disconnected!");
     break;
-    case '4': //error message 4 - airTemp
+    case 4: //error message 4 - airTemp
       Serial.println("air temp sensor disconnected!");
     break;
   }    
+}
+
+void hvacontrol::tftfault(int x){
+  tft.fillRoundRect(0, 35, 320, 165, 1, ST77XX_WHITE);
+
+  tft.setTextColor(ST77XX_CYAN);
+  tft.setCursor(70, 200);
+  tft.print("FAULT detected!");
+  tft.setCursor(20, 220);
+  tft.print("Check Sensors Connection and Power");
+  delay(1000);
+  tft.fillRoundRect(70, 200, 200, 18, 1, ST77XX_WHITE);
+  tft.fillRoundRect(20, 220, 300, 18, 1, ST77XX_WHITE);
+  
 }

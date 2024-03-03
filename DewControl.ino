@@ -13,9 +13,9 @@
 #include "hvacontrol.h"
 
 hvacontrol hvac(
-3, //encoder A
-4, //encoder B
-5); //valve control
+  3, //encoder A
+  4, //encoder B
+  5); //valve control
 
 clicli mycli(hvac); //setup clicli tool for hvac control
 
