@@ -536,6 +536,8 @@ bool hvacontrol::selftest(){
   float valvestat2 = analogRead(ValveStatusPin);
   if(valvestat  < Vmin &&  valvestat2 < Vmin){
     fault(1);
+
+    
     return false;
   }
   float PipeTemp = analogRead(WaterTempPin);
