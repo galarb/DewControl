@@ -18,6 +18,7 @@ static int ValveStatusPin=A0, WaterTempPin=A1, RHPin=A2, AirTempPin=A3, PotenPin
 bool togsw = false;//button flag
 bool result; //button variable
 bool mode; //heating 1, cooling 0
+bool alarmAck = false; //true overides the default tft 
 float sp = 25; //setpoint for heating
 bool direction = 1;
 float Vmin = 200; //part of 1024 of analog read.
@@ -189,14 +190,17 @@ void bmpDraw(char *filename, uint8_t x, uint16_t y) {
 // May need to reverse subscript order if porting elsewhere.
  
 
-hvacontrol::hvacontrol(int encoderPinA, int encoderPinB, int valvecontrolPin) {
+hvacontrol::hvacontrol(int encoderPinA, int encoderPinB, int valvecontrolPin, int alarmAckPin) {
   _encoderPinA = encoderPinA;
   _encoderPinB = encoderPinB;
   _valvecontrolPin = valvecontrolPin;
+  _alarmAckPin = alarmAckPin;
   _onofsw  = false;
 
   pinMode(_encoderPinA, INPUT); 
   pinMode(_encoderPinB, INPUT); 
+  pinMode(_alarmAckPin, INPUT_PULLUP);
+
 }
 
 void hvacontrol::begin(double bdrate) {
@@ -343,14 +347,12 @@ void hvacontrol::run(float kpp, float kii, float kdd){
        //     setValve(ValveValue);
      //}
     if(checkButton()){
-        if(!selftest()){
-          tftdatashow(getvalvestat(), getairtemp(), getRH(), getwatertemp());
-        }
+      selftest();
+      tftdatashow(getvalvestat(), getairtemp(), getRH(), getwatertemp());
       }
       else{
         tftopershow(getdew_point(), setpipetempcool());
       }
-
   }
 }
 
@@ -545,9 +547,7 @@ bool hvacontrol::selftest(){
   float valvestat2 = analogRead(ValveStatusPin);
   if(valvestat  < Vmin &&  valvestat2 < Vmin){
     fault(1);
-
-
-    return false;
+    return true;
   }
   float PipeTemp = analogRead(WaterTempPin);
   float PipeTemp2 = analogRead(WaterTempPin);
@@ -596,19 +596,21 @@ void hvacontrol::fault(int x){
 }
 
 void hvacontrol::tftfault(int x){
-  tft.fillRoundRect(0, 35, 320, 165, 1, ST77XX_WHITE);
-  tft.setTextColor(ST77XX_CYAN);
-  tft.setCursor(5, 160);
-  tft.setTextSize(3);
-  tft.print("FAULT ");
-  tft.print(x);
-  tft.print(" detected!");
-  tft.setTextSize(2);
-  tft.setCursor(15, 190);
-  tft.print("Check Sensors Connection");
-  tft.setCursor(90, 210);
-  tft.print("and power");
-  delay(1000);
-  tft.fillRoundRect(70, 200, 200, 18, 1, ST77XX_WHITE);
-  tft.fillRoundRect(20, 220, 300, 18, 1, ST77XX_WHITE);
+  if(!digitalRead(_alarmAckPin)){
+    tft.fillRoundRect(0, 35, 320, 165, 1, ST77XX_WHITE);
+    tft.setTextColor(ST77XX_CYAN);
+    tft.setCursor(5, 160);
+    tft.setTextSize(3);
+    tft.print("FAULT ");
+    tft.print(x);
+    tft.print(" detected!");
+    tft.setTextSize(2);
+    tft.setCursor(15, 190);
+    tft.print("Check Sensors Connection");
+    tft.setCursor(90, 210);
+    tft.print("and power");
+    delay(1000);
+    tft.fillRoundRect(70, 200, 200, 18, 1, ST77XX_WHITE);
+    tft.fillRoundRect(20, 220, 300, 18, 1, ST77XX_WHITE);
+  }
 }

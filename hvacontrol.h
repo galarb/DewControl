@@ -13,7 +13,7 @@
 class hvacontrol { 
 
   public:
-    hvacontrol(int ecoderPinA, int ecoderPinB, int valvecontrolPin); 
+    hvacontrol(int ecoderPinA, int ecoderPinB, int valvecontrolPin, int alarmAckPin); 
     void begin(double bdrate);
     bool checkmode();
     void run(float kpp, float kii, float kdd);
@@ -43,6 +43,7 @@ class hvacontrol {
     int _encoderPinA;
     int _encoderPinB;
     int _valvecontrolPin;
+    int _alarmAckPin;
     double PIDcalc(double inp, int sp);
     unsigned long currentTime;
     unsigned long previousTime;
