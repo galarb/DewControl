@@ -290,9 +290,11 @@ bool hvacontrol::checkmode(){
     while (t < 1000){
       t++;
       delay(1);
+      pinMode(2, INPUT_PULLUP);
       if (digitalRead(2) == 0){
         mode = !mode;
       }
+      if(encoderchange()){t = 1000;}//skip the timer
     }
     t = 0;
     tft.fillScreen(ST77XX_WHITE);//..black
@@ -443,8 +445,12 @@ void hvacontrol::tftwelcome(){
 void hvacontrol::tftdatashow(float valve, float airtemp, float RH, float pipetemp){
   tft.setCursor(50, 10);
   //tft.setTextColor(ST77XX_CYAN);//...red 
-  //tft.setTextColor(ST77XX_MAGENTA);//...green 
-  tft.setTextColor(ST77XX_YELLOW);//...blue
+  //tft.setTextColor(ST77XX_MAGENTA);//...green
+  tft.setTextColor(ST77XX_ORANGE);//... 
+  if (mode){
+    tft.setTextColor(ST77XX_CYAN); 
+  }
+  //...blue
   tft.setTextSize(3); //1 is default 6x8, 2 is 12x16, 3 is 18x24
   tft.write("HVAC CONTROL");
   tft.setTextSize(2); //1 is default 6x8, 2 is 12x16, 3 is 18x24
@@ -475,7 +481,7 @@ void hvacontrol::tftdatashow(float valve, float airtemp, float RH, float pipetem
   tft.drawFastHLine(0, 102, 310, ST77XX_BLACK);
   tft.drawFastHLine(0, 148, 310, ST77XX_BLACK);
   tft.drawFastHLine(0, 194, 310, ST77XX_BLACK);
-  
+
   tft.drawFastVLine(180, 35, 200, ST77XX_BLACK);
 }
 void hvacontrol::tftopershow(float dp, float sp){
@@ -483,6 +489,9 @@ void hvacontrol::tftopershow(float dp, float sp){
   //tft.setTextColor(ST77XX_CYAN);//...red 
   //tft.setTextColor(ST77XX_MAGENTA);//...green 
   tft.setTextColor(ST77XX_ORANGE);//... 
+  if (mode){
+    tft.setTextColor(ST77XX_CYAN);
+  }
  // tft.setTextColor(ST77XX_YELLOW);//...blue
   tft.setTextSize(3); //1 is default 6x8, 2 is 12x16, 3 is 18x24
   tft.write("HVAC CONTROL");
@@ -537,7 +546,7 @@ bool hvacontrol::selftest(){
   if(valvestat  < Vmin &&  valvestat2 < Vmin){
     fault(1);
 
-    
+
     return false;
   }
   float PipeTemp = analogRead(WaterTempPin);
@@ -562,35 +571,44 @@ bool hvacontrol::selftest(){
   return false;
 }
 void hvacontrol::fault(int x){
+
+
   //Serial.print("x = "); Serial.println(x);
 
   switch (x) {
     case 1: //error message 1 , valve sensor disconnected
       Serial.println("valve status sensor disconnected!");
-     // tftfault(1);
+      tftfault(1);
     break;
     case 2: //error message 2 , sensor temp
       Serial.println("pipe temp sensor disconnected!");
+      tftfault(2);
     break;
     case 3: //error message 3 - RH
       Serial.println("RH sensor disconnected!");
+      tftfault(3);
     break;
     case 4: //error message 4 - airTemp
       Serial.println("air temp sensor disconnected!");
+      tftfault(4);
     break;
-  }    
+  }
 }
 
 void hvacontrol::tftfault(int x){
   tft.fillRoundRect(0, 35, 320, 165, 1, ST77XX_WHITE);
-
   tft.setTextColor(ST77XX_CYAN);
-  tft.setCursor(70, 200);
-  tft.print("FAULT detected!");
-  tft.setCursor(20, 220);
-  tft.print("Check Sensors Connection and Power");
+  tft.setCursor(5, 160);
+  tft.setTextSize(3);
+  tft.print("FAULT ");
+  tft.print(x);
+  tft.print(" detected!");
+  tft.setTextSize(2);
+  tft.setCursor(15, 190);
+  tft.print("Check Sensors Connection");
+  tft.setCursor(90, 210);
+  tft.print("and power");
   delay(1000);
   tft.fillRoundRect(70, 200, 200, 18, 1, ST77XX_WHITE);
   tft.fillRoundRect(20, 220, 300, 18, 1, ST77XX_WHITE);
-  
 }
