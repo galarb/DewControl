@@ -493,6 +493,7 @@ void hvacontrol::tftopershow(float dp, float sp){
   tft.setTextColor(ST77XX_ORANGE);//... 
   if (mode){
     tft.setTextColor(ST77XX_CYAN);
+    
   }
  // tft.setTextColor(ST77XX_YELLOW);//...blue
   tft.setTextSize(3); //1 is default 6x8, 2 is 12x16, 3 is 18x24
