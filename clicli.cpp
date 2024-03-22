@@ -134,6 +134,9 @@ void clicli::run() {
       case 'v':
         myhvacontrol.setValve(command[1]);
         break;
+      case 'p':
+        myhvacontrol.PIDcalc(command[1], command[2]);
+        break;
        message_pos = 0;     //Reset for the next message
       }
    }

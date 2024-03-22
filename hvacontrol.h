@@ -34,6 +34,7 @@ class hvacontrol {
     bool getevaldir();
     bool encoderchange();
     void tftfault(int x);
+    double PIDcalc(double inp, int sp);
 
 
   private:
@@ -44,7 +45,6 @@ class hvacontrol {
     int _encoderPinB;
     int _valvecontrolPin;
     int _alarmAckPin;
-    double PIDcalc(double inp, int sp);
     unsigned long currentTime;
     unsigned long previousTime;
     double elapsedTime;
