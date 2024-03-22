@@ -131,7 +131,9 @@ void clicli::run() {
         Serial.println(" Degrees");
 
         break;
-       
+      case 'v':
+        myhvacontrol.setValve(command[1]);
+        break;
        message_pos = 0;     //Reset for the next message
       }
    }

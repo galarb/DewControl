@@ -22,6 +22,7 @@ bool alarmAck = false; //true overides the default tft
 float sp = 25; //setpoint for heating
 bool direction = 1;
 float Vmin = 200; //part of 1024 of analog read.
+float Last_sp, Last_dp, Last_valve, Last_airtemp, Last_RH, Last_pipetemp;
 Adafruit_ST7789 tft = Adafruit_ST7789(9, 8, 7);//CS, dc(MISO), MOSI, SCK
 //9(CS), 11(COPI), 12(CIPO), 13(SCK)
 //(int8_t cs, int8_t dc, int8_t rst);
@@ -340,20 +341,26 @@ void hvacontrol::run(float kpp, float kii, float kdd){
       int ValveValue = map(PIDcalc(pipetempPV, pipetempSP), 0, 50, 0, 100);
       //Serial.print("pipetempPV = "); Serial.println(pipetempPV); 
       //Serial.print("pipetempSP = "); Serial.println(pipetempSP); //delay(2000);
-      setValve(ValveValue);//expexts values between 0..100
+      // setValve(ValveValue);//expexts values between 0..100
       
    // } else {
      //       int ValveValue = map(PIDcalc(getwatertemp(), 15), 0, 50, 0, 100);
        //     setValve(ValveValue);
-     //}
     if(checkButton()){
-      selftest();
-      tftdatashow(getvalvestat(), getairtemp(), getRH(), getwatertemp());
+      if (!selftest()){
+        tftdatashow(getvalvestat(), getairtemp(), getRH(), getwatertemp());
       }
-      else{
-        tftopershow(getdew_point(), setpipetempcool());
       }
+    else{
+      tftopershow(getdew_point(), setpipetempcool());
+    }
   }
+  Last_dp = 0;
+  Last_sp = 0;
+  Last_valve = 1;
+  Last_airtemp = 1;
+  Last_RH = 1;
+  Last_pipetemp = 1;
 }
 
 float hvacontrol::setpipetempcool(){ // returns the setpoint pipe temp
@@ -418,8 +425,11 @@ float hvacontrol::getwatertemp(){
 }
 
 bool hvacontrol::setValve(int valve){//0..100
+  Serial.println(valve);
+  Serial.println("ho");
   int valvecommand = map(valve, 0, 100, 0, 254);
   if(valvecommand > 254){valvecommand = 254;}
+  Serial.println(valvecommand);
   analogWrite(_valvecontrolPin, valvecommand);
   //Serial.print("valve command = ");Serial.println(valvecommand); delay(2000);
   int valvestatus = getvalvestat();
@@ -459,25 +469,37 @@ void hvacontrol::tftdatashow(float valve, float airtemp, float RH, float pipetem
   tft.setTextColor(ST77XX_BLACK);//...white
   tft.setCursor(5, 38);
   tft.write("Valve Status");
-  tft.fillRoundRect(250, 38, 90, 18, 1, ST77XX_WHITE);
-  tft.fillRoundRect(250, 84, 100, 18, 1, ST77XX_WHITE);
-  tft.fillRoundRect(250, 129, 90, 18, 1, ST77XX_WHITE);
-  tft.fillRoundRect(250, 175, 100, 18, 1, ST77XX_WHITE);
   
-  tft.setCursor(250, 38);
-  tft.print(valve);
+  if (valve != Last_valve){
+    tft.setCursor(250, 38);
+    tft.fillRoundRect(250, 38, 90, 18, 1, ST77XX_WHITE);
+    tft.print(valve);
+    Last_valve = valve;
+  }
+  if (pipetemp != Last_pipetemp){
+    tft.setCursor(250, 175);
+    tft.fillRoundRect(250, 175, 100, 18, 1, ST77XX_WHITE);
+    tft.print(pipetemp);
+    Last_pipetemp = pipetemp;
+  }
+  if (airtemp != Last_airtemp){
+    tft.setCursor(250, 83);
+    tft.fillRoundRect(250, 84, 100, 18, 1, ST77XX_WHITE);
+    tft.print(airtemp);
+    Last_airtemp = airtemp;
+  }
+  if (RH != Last_RH){
+    tft.setCursor(250, 129);
+    tft.fillRoundRect(250, 129, 90, 18, 1, ST77XX_WHITE);
+    tft.print(RH);
+    Last_RH = RH;
+  }
   tft.setCursor(5, 83);
   tft.write("Air Temp");
-  tft.setCursor(250, 83);
-  tft.print(airtemp);
   tft.setCursor(5, 129);
   tft.write("RH");
-  tft.setCursor(250, 129);
-  tft.print(RH);
   tft.setCursor(5, 175);
   tft.write("Pipe Temp");
-  tft.setCursor(250, 175);
-  tft.print(pipetemp);
 
   tft.drawFastHLine(0, 56, 310, ST77XX_BLACK);
   tft.drawFastHLine(0, 102, 310, ST77XX_BLACK);
@@ -504,17 +526,23 @@ void hvacontrol::tftopershow(float dp, float sp){
   tft.write("Set Point");
   tft.setCursor(5, 140);
   tft.write("Dew Point");
-  tft.setCursor(220, 70);
-  tft.fillRoundRect(220, 70, 90, 20, 1, ST77XX_WHITE);
-  tft.fillRoundRect(220, 140, 100, 20, 1, ST77XX_WHITE);
-  tft.print(sp);
-  tft.setCursor(220, 140);
-  tft.print(dp);
-  
+  if (sp != Last_sp){
+    tft.setCursor(220, 70);
+    tft.fillRoundRect(220, 70, 90, 20, 1, ST77XX_WHITE); 
+    tft.print(sp);
+    Last_sp = sp;
+  }
+  if (dp != Last_dp){
+    tft.setCursor(220, 140);
+    tft.fillRoundRect(220, 140, 100, 20, 1, ST77XX_WHITE);
+    tft.print(dp);
+    Last_dp = dp;
+  }
   tft.drawFastHLine(0, 110, 310, ST77XX_BLACK);
   tft.drawFastVLine(180, 60, 100, ST77XX_BLACK);
   delay(200);
 }
+
 float hvacontrol::getairtemp(){
   float tempair = analogRead(AirTempPin);//verify correct settings of jumpers in 22UTH-13 (S4 - closed, S5 - open)
   return map(tempair, 0, 1024, 0, 50);
@@ -542,6 +570,9 @@ void hvacontrol::sdbegin(){
       }    
 }
 bool hvacontrol::selftest(){
+  if (digitalRead(_alarmAckPin) == 0){
+    return false;
+  }
   //check all inputs for failure. 
   //calls fault(x)//1 - valve, 2 - temp, 3 - RH, 4 - airTemp
   float valvestat = analogRead(ValveStatusPin);
@@ -597,7 +628,7 @@ void hvacontrol::fault(int x){
 }
 
 void hvacontrol::tftfault(int x){
-  if(!digitalRead(_alarmAckPin)){
+  if(digitalRead(_alarmAckPin)){
     tft.fillRoundRect(0, 35, 320, 165, 1, ST77XX_WHITE);
     tft.setTextColor(ST77XX_CYAN);
     tft.setCursor(5, 160);
