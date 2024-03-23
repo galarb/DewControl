@@ -129,13 +129,14 @@ void clicli::run() {
         Serial.print("dew point = ");
         Serial.print(myhvacontrol.getdew_point());
         Serial.println(" Degrees");
-
         break;
+
       case 'v':
         myhvacontrol.setValve(command[1]);
         break;
+
       case 'p':
-        myhvacontrol.PIDcalc(command[1], command[2]);
+        Serial.println(myhvacontrol.PIDcalc(command[1], command[2]));//PV, SP
         break;
        message_pos = 0;     //Reset for the next message
       }
