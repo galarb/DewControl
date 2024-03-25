@@ -74,7 +74,7 @@ uint32_t read32(File f) {
   return result;
 }
 
-#define BUFFPIXEL 20
+#define BUFFPIXEL 20  
 void bmpDraw(char *filename, uint8_t x, uint16_t y) {
   File     bmpFile;
   int      bmpWidth, bmpHeight;   // W+H in pixels
@@ -309,9 +309,9 @@ bool hvacontrol::checkmode(){
 double hvacontrol::PIDcalc(double inp, int sp){
   currentTime = millis();                //get current time
   elapsedTime = (double)(currentTime - previousTime)/1000; //compute time elapsed from previous computation (60ms approx). divide in 1000 to get in Sec
-  //Serial.print(currentTime); //for serial plotter
+  // Serial.print("current time = ");Serial.println(currentTime); //for serial plotter
   //Serial.println("\t"); //for serial plotter
-  error = sp - inp;              // determine error
+  error = inp - sp;              // determine error
   cumError += error * elapsedTime;                   // compute integral
   rateError = (error - lastError)/elapsedTime;       // compute derivative deltaError/deltaTime
   if(rateError > 0.3 || rateError < -0.3){cumError = 0;}             // reset the Integral commulator when Proportional is doing the work
@@ -322,8 +322,7 @@ double hvacontrol::PIDcalc(double inp, int sp){
   previousTime = currentTime;                        //remember current time
   if(out > 254){out = 254;}    //limit the function for smoother operation
   if(out < -254){out = -254;}
-  if(cumError > 255 || cumError < -255){cumError = 0; out = 0;} // reset the Integral commulator
-  //Serial.println(out);
+  Serial.print("out value = "); Serial.println(out);
   return out;    //the function returns the PID output value 
 }
 
@@ -341,7 +340,7 @@ void hvacontrol::run(float kpp, float kii, float kdd){
       int ValveValue = map(PIDcalc(pipetempPV, pipetempSP), 0, 50, 0, 100);
       //Serial.print("pipetempPV = "); Serial.println(pipetempPV); 
       //Serial.print("pipetempSP = "); Serial.println(pipetempSP); //delay(2000);
-      // setValve(ValveValue);//expexts values between 0..100
+      setValve(ValveValue);//expexts values between 0..100
       
    // } else {
      //       int ValveValue = map(PIDcalc(getwatertemp(), 15), 0, 50, 0, 100);
@@ -425,11 +424,8 @@ float hvacontrol::getwatertemp(){
 }
 
 bool hvacontrol::setValve(int valve){//0..100
-  Serial.println(valve);
-  Serial.println("ho");
   int valvecommand = map(valve, 0, 100, 0, 254);
   if(valvecommand > 254){valvecommand = 254;}
-  Serial.println(valvecommand);
   analogWrite(_valvecontrolPin, valvecommand);
   //Serial.print("valve command = ");Serial.println(valvecommand); delay(2000);
   int valvestatus = getvalvestat();
