@@ -13,7 +13,7 @@
 class hvacontrol { 
 
   public:
-    hvacontrol(int ecoderPinA, int ecoderPinB, int valvecontrolPin, int alarmAckPin); 
+    hvacontrol(int ecoderPinA, int ecoderPinB, int valvecontrolPin, int alarmAckPin, int buttonPin); 
     void begin(double bdrate);
     bool checkmode();
     void run(float kpp, float kii, float kdd);
@@ -35,16 +35,17 @@ class hvacontrol {
     bool encoderchange();
     void tftfault(int x);
     double PIDcalc(double inp, int sp);
+    bool checkButton();
 
 
   private:
     float setpipetempcool();
     float setpipetempheat();
-    bool checkButton();
     int _encoderPinA;
     int _encoderPinB;
     int _valvecontrolPin;
     int _alarmAckPin;
+    int _ButtonPin;
     unsigned long currentTime;
     unsigned long previousTime;
     double elapsedTime;

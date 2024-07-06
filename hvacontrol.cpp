@@ -10,20 +10,32 @@
 #include <SPI.h>
 #include <SD.h>
 #include "ButtonIRQ.h"
+#include <TouchScreen.h> 
+
+#define WHITE 0x0000
+#define BLACK 0xFFFF
+#define CYAN 0xF800
+#define MAGENTA 0x07E0
+#define YELLOW 0x001F
+#define RED 0x07FF
+#define GREEN 0xF81F
+#define BLUE 0xFFE0
+//#define X 0xFC00
 
 bool aState, aLastState; //encoder state variables
 //bool devMode = false; //a flag to control graphics
 float setdelta = 5, maxdelta = 50; //default 5 above the calculated dp
 static int ValveStatusPin=A0, WaterTempPin=A1, RHPin=A2, AirTempPin=A3, PotenPin=A4;//sensors pins
 bool togsw = false;//button flag
-bool result; //button variable
+bool stat; //button variable
+bool laststat;//for button memory
 bool mode; //heating 1, cooling 0
 bool alarmAck = false; //true overides the default tft 
 float sp = 25; //setpoint for heating
 bool direction = 1;
 float Vmin = 200; //part of 1024 of analog read.
 float Last_sp, Last_dp, Last_valve, Last_airtemp, Last_RH, Last_pipetemp;
-Adafruit_ST7789 tft = Adafruit_ST7789(9, 8, 7);//CS, dc(MISO), MOSI, SCK
+Adafruit_ST7789 tft = Adafruit_ST7789(10, 9, 8);//CS, dc(MISO), MOSI, SCK
 //9(CS), 11(COPI), 12(CIPO), 13(SCK)
 //(int8_t cs, int8_t dc, int8_t rst);
 /*reset 7 - blue(purple)
@@ -35,173 +47,16 @@ miso 12 - blue(gray)*/
 ButtonIRQ devmodebutton(2); //initiate IRQ Button
 
 
-void printDirectory(File dir, int numTabs) {
-  while (true) {
-    File entry =  dir.openNextFile();
-    if (! entry) {
-      // no more files
-      break;
-    }
-    for (uint8_t i = 0; i < numTabs; i++) {
-      Serial.print('\t');
-    }
-    Serial.print(entry.name());
-    if (entry.isDirectory()) {
-      Serial.println("/");
-      printDirectory(entry, numTabs + 1);
-    } else {
-      // files have sizes, directories do not
-      Serial.print("\t\t");
-      Serial.println(entry.size(), DEC);
-    }
-    entry.close();
-  }
-}
 
-uint16_t read16(File f) {
-  uint16_t result;
-  ((uint8_t *)&result)[0] = f.read(); // LSB
-  ((uint8_t *)&result)[1] = f.read(); // MSB
-  return result;
-}
- 
-uint32_t read32(File f) {
-  uint32_t result;
-  ((uint8_t *)&result)[0] = f.read(); // LSB
-  ((uint8_t *)&result)[1] = f.read();
-  ((uint8_t *)&result)[2] = f.read();
-  ((uint8_t *)&result)[3] = f.read(); // MSB
-  return result;
-}
-
-#define BUFFPIXEL 20  
-void bmpDraw(char *filename, uint8_t x, uint16_t y) {
-  File     bmpFile;
-  int      bmpWidth, bmpHeight;   // W+H in pixels
-  uint8_t  bmpDepth;              // Bit depth (currently must be 24)
-  uint32_t bmpImageoffset;        // Start of image data in file
-  uint32_t rowSize;               // Not always = bmpWidth; may have padding
-  uint8_t  sdbuffer[3*BUFFPIXEL]; // pixel buffer (R+G+B per pixel)
-  uint8_t  buffidx = sizeof(sdbuffer); // Current position in sdbuffer
-  boolean  goodBmp = false;       // Set to true on valid header parse
-  boolean  flip    = true;        // BMP is stored bottom-to-top
-  int      w, h, row, col;
-  uint8_t  r, g, b;
-  uint32_t pos = 0, startTime = millis();
- 
-  if((x >= tft.width()) || (y >= tft.height())) return;
- 
-  Serial.println();
-  Serial.print(F("Loading image '"));
-  Serial.print(filename);
-  Serial.println('\'');
- 
-  // Open requested file on SD card
-  if ((bmpFile = SD.open(filename)) == NULL) {
-    Serial.print(F("File not found"));
-    return;
-  }
- 
-  // Parse BMP header
-  if(read16(bmpFile) == 0x4D42) { // BMP signature
-    Serial.print(F("File size: ")); Serial.println(read32(bmpFile));
-    (void)read32(bmpFile); // Read & ignore creator bytes
-    bmpImageoffset = read32(bmpFile); // Start of image data
-    Serial.print(F("Image Offset: ")); Serial.println(bmpImageoffset, DEC);
-    // Read DIB header
-    Serial.print(F("Header size: ")); Serial.println(read32(bmpFile));
-    bmpWidth  = read32(bmpFile);
-    bmpHeight = read32(bmpFile);
-    if(read16(bmpFile) == 1) { // # planes -- must be '1'
-      bmpDepth = read16(bmpFile); // bits per pixel
-      Serial.print(F("Bit Depth: ")); Serial.println(bmpDepth);
-      if((bmpDepth == 24) && (read32(bmpFile) == 0)) { // 0 = uncompressed
- 
-        goodBmp = true; //Supported BMP format -- proceed!
-        Serial.print(F("Image size: "));
-        Serial.print(bmpWidth);
-        Serial.print('x');
-        Serial.println(bmpHeight);
- 
-        // BMP rows are padded (if needed) to 4-byte boundary
-        rowSize = (bmpWidth * 3 + 3) & ~3;
- 
-        // If bmpHeight is negative, image is in top-down order.
-        // This is not canon but has been observed in the wild.
-        if(bmpHeight < 0) {
-          bmpHeight = -bmpHeight;
-          flip      = false;
- }
- 
-        // Crop area to be loaded
-        w = bmpWidth;
-        h = bmpHeight;
-        if((x+w-1) >= tft.width())  w = tft.width()  - x;
-        if((y+h-1) >= tft.height()) h = tft.height() - y;
- 
-        // Set TFT address window to clipped image bounds
-        tft.startWrite();
-        tft.setAddrWindow(x, y, w, h);
- 
-        for (row=0; row<h; row++) { // For each scanline...
- 
-          // Seek to start of scan line.  It might seem labor-
-          // intensive to be doing this on every line, but this
-          // method covers a lot of gritty details like cropping
-          // and scanline padding.  Also, the seek only takes
-          // place if the file position actually needs to change
-          // (avoids a lot of cluster math in SD library).
-          if(flip) // Bitmap is stored bottom-to-top order (normal BMP)
-            pos = bmpImageoffset + (bmpHeight - 1 - row) * rowSize;
-          else     // Bitmap is stored top-to-bottom
-            pos = bmpImageoffset + row * rowSize;
-          if(bmpFile.position() != pos) { // Need seek?
-            tft.endWrite();
-            bmpFile.seek(pos);
-            buffidx = sizeof(sdbuffer); // Force buffer reload
-          }
- 
-          for (col=0; col<w; col++) { // For each pixel...
-            // Time to read more pixel data?
-            if (buffidx >= sizeof(sdbuffer)) { // Indeed
-              bmpFile.read(sdbuffer, sizeof(sdbuffer));
-              buffidx = 0; // Set index to beginning
-              tft.startWrite();
-            }
- 
-            // Convert pixel from BMP to TFT format, push to display
-            b = sdbuffer[buffidx++];
-            g = sdbuffer[buffidx++];
-            r = sdbuffer[buffidx++];
-            tft.pushColor(tft.color565(r,g,b));
-          } // end pixel
-        } // end scanline
-        tft.endWrite();
-        Serial.print(F("Loaded in "));
-        Serial.print(millis() - startTime);
-        Serial.println(" ms");
-      } // end goodBmp
-    }
-  }
- bmpFile.close();
-  if(!goodBmp) Serial.println(F("BMP format not recognized."));
-}
-// These read 16- and 32-bit types from the SD card file.
-// BMP data is stored little-endian, Arduino is little-endian too.
-// May need to reverse subscript order if porting elsewhere.
- 
-
-hvacontrol::hvacontrol(int encoderPinA, int encoderPinB, int valvecontrolPin, int alarmAckPin) {
+hvacontrol::hvacontrol(int encoderPinA, int encoderPinB, int valvecontrolPin, int alarmAckPin, int buttonPin) {
   _encoderPinA = encoderPinA;
   _encoderPinB = encoderPinB;
   _valvecontrolPin = valvecontrolPin;
   _alarmAckPin = alarmAckPin;
   _onofsw  = false;
+  _ButtonPin = buttonPin;
 
-  pinMode(_encoderPinA, INPUT); 
-  pinMode(_encoderPinB, INPUT); 
-  pinMode(_alarmAckPin, INPUT_PULLUP);
-
+  
 }
 
 void hvacontrol::begin(double bdrate) {
@@ -212,7 +67,16 @@ void hvacontrol::begin(double bdrate) {
   Serial.println(_encoderPinA);
   Serial.print("encoderPinB = ");  
   Serial.println(_encoderPinB);
+  Serial.print("valvecontrolPin=");
+  Serial.println(_valvecontrolPin);
+  Serial.print("alarmAckPin = ");  
+  Serial.println(_alarmAckPin);
   
+  pinMode(_encoderPinA, INPUT); 
+  pinMode(_encoderPinB, INPUT); 
+  pinMode(_alarmAckPin, INPUT_PULLUP);
+  pinMode(_valvecontrolPin, OUTPUT);
+  pinMode(_ButtonPin, INPUT_PULLUP);
   aLastState = digitalRead(_encoderPinA); //setup the last var of encoder
 
   tft.init(240, 320); 
@@ -220,8 +84,9 @@ void hvacontrol::begin(double bdrate) {
   tft.setTextSize(2); //1 is default 6x8, 2 is 12x16, 3 is 18x24
   //sdbegin();  
   tftwelcome(); //welcome image for 1 min
+  laststat = devmodebutton.isTrue();
+
   checkmode();
-  devmodebutton.begin();//required for button IRQ
   Serial.println("Setup finished");
 }
 
@@ -265,45 +130,49 @@ bool hvacontrol::getevaldir(){//quitens down a spiky encoder
 }
 
 bool hvacontrol::checkmode(){
-  double t = 0;
-  pinMode(2, INPUT_PULLUP);
+  double t = 0; //timer variable
   for (int c = 10; c > 0; c--){
     Serial.print(c);
-    tft.setTextColor(ST77XX_MAGENTA);//...green 
+    tft.setTextColor(GREEN);
     tft.setTextSize(3); //1 is default 6x8, 2 is 12x16, 3 is 18x24
     tft.setCursor(50, 5);
     tft.write("CHOOSE MODE");
     tft.setTextSize(3); //1 is default 6x8, 2 is 12x16, 3 is 18x24
     tft.setCursor(10, 120);
-    tft.print(c);   
+    tft.println(c);   
     tft.setCursor(80, 120);
     tft.write("Seconds left");
     
     Serial.println(" sec left!");
+    Serial.println(mode);
     if (mode == 1){ //hot mode
       Serial.println("Hot mode");
-      tft.setTextColor(ST77XX_CYAN);//...red 
+      tft.setTextColor(RED);//...red 
       tft.setCursor(40, 180);
       tft.write("Hot mode");
     }
     else{ //cold mode
       Serial.println("Cold mode");
-      tft.setTextColor(ST77XX_YELLOW);//...blue
+      tft.setTextColor(BLUE);//...blue
       tft.setCursor(40, 180);
       tft.write("Cold mode");
     }
     while (t < 1000){
       t++;
+      pinMode(_ButtonPin, INPUT_PULLUP);
       delay(1);
-      pinMode(2, INPUT_PULLUP);
-      if (digitalRead(2) == 0){
+      if (digitalRead(_ButtonPin) == 0){
         mode = !mode;
       }
-      if(encoderchange()){t = 1000;}//skip the timer
+      if(encoderchange()){
+
+        t = 1000;}//skip the timer
     }
     t = 0;
-    tft.fillScreen(ST77XX_WHITE);//..black
+    tft.fillScreen(BLACK);//..black
   }
+  //Serial.print("mode ="); Serial.println(mode);
+
   return mode;
 }
 double hvacontrol::PIDcalc(double inp, int sp){
@@ -312,9 +181,14 @@ double hvacontrol::PIDcalc(double inp, int sp){
   // Serial.print("current time = ");Serial.println(currentTime); //for serial plotter
   //Serial.println("\t"); //for serial plotter
   error = inp - sp;              // determine error
-  cumError += error * elapsedTime;                   // compute integral
+  cumError += (error * elapsedTime);            // compute integral
   rateError = (error - lastError)/elapsedTime;       // compute derivative deltaError/deltaTime
-  if(rateError > 0.3 || rateError < -0.3){cumError = 0;}             // reset the Integral commulator when Proportional is doing the work
+  //Serial.print("rateError = "); Serial.println(rateError);
+  //Serial.print("elapsed time = "); Serial.println(elapsedTime);
+  //delay(1000);
+
+  if(rateError < 0.3 || rateError > -0.3){cumError = 0;}// reset the Integral commulator
+  //Serial.print("I = "); Serial.println(cumError);
 
   double out = kp*error + ki*cumError + kd*rateError; //PID output               
 
@@ -331,27 +205,28 @@ void hvacontrol::run(float kpp, float kii, float kdd){
   ki = kii;
   kd = kdd;
   if(mode == 1){//heating
-    
+    tft.fillScreen(GREEN);
+    Serial.println("heating mode");
+    delay(5000);
   }
   else { //cooling
-    //if(encoderchange()){
-      float pipetempPV = getwatertemp();//a number between 0-50
-      float pipetempSP = setpipetempcool();//default dp+5, otherwise between dp and 50
-      int ValveValue = map(PIDcalc(pipetempPV, pipetempSP), 0, 50, 0, 100);
-      //Serial.print("pipetempPV = "); Serial.println(pipetempPV); 
-      //Serial.print("pipetempSP = "); Serial.println(pipetempSP); //delay(2000);
-      setValve(ValveValue);//expexts values between 0..100
-      
-   // } else {
-     //       int ValveValue = map(PIDcalc(getwatertemp(), 15), 0, 50, 0, 100);
-       //     setValve(ValveValue);
+    float pipetempPV = getwatertemp();//a number between 0-50
+    float pipetempSP = setpipetempcool();//dp+potentiometer. up to +15
+    int ValveValue = map(PIDcalc(pipetempPV, pipetempSP), 0, 50, 0, 100);
+    //Serial.print("pipetempPV = "); Serial.println(pipetempPV); 
+    //Serial.print("pipetempSP = "); Serial.println(pipetempSP); //delay(2000);
+    setValve(ValveValue);//expexts values between 0..100
+    
     if(checkButton()){
-      if (!selftest()){
+      //Serial.println("data show mode");
+      //if (!selftest()){
         tftdatashow(getvalvestat(), getairtemp(), getRH(), getwatertemp());
-      }
+        //Serial.println("Self test passed");
+        //}
       }
     else{
       tftopershow(getdew_point(), setpipetempcool());
+      //Serial.println("operator show mode");
     }
   }
   Last_dp = 0;
@@ -396,12 +271,18 @@ float hvacontrol::setpipetempheat(){ // returns the setpoint pipe temp
 }
 
 bool hvacontrol::checkButton(){
-  result = devmodebutton.isTrue();
-  if(result){
+  stat = devmodebutton.isTrue();
+  //Serial.print("switch status = "); Serial.println(stat);
+  //stat = digitalRead(_ButtonPin);
+    //Serial.print("togsw = "); Serial.println(togsw);
+    //Serial.print("laststat = "); Serial.println(laststat);
+
+  if(laststat != stat){
     togsw = !togsw;
-    tft.fillScreen(ST77XX_WHITE);//...black
+    tft.fillScreen(BLACK);//to clear between the screens
 
   }
+  laststat = stat;
   return togsw;
 }
 
@@ -411,6 +292,7 @@ float hvacontrol::getdew_point(){
 
   return dewpoint;
 }
+
 float hvacontrol::getvalvestat(){
   float valvestatus = analogRead(ValveStatusPin);
   valvestatus = map(valvestatus, 0, 1024, 0, 100);
@@ -424,17 +306,19 @@ float hvacontrol::getwatertemp(){
 }
 
 bool hvacontrol::setValve(int valve){//0..100
+  Serial.println("*********new iteration********");
+  Serial.print("valve argument = ");Serial.println(valve);
   int valvecommand = map(valve, 0, 100, 0, 254);
   if(valvecommand > 254){valvecommand = 254;}
+  if(valvecommand < 0){valvecommand = 0;}
   analogWrite(_valvecontrolPin, valvecommand);
-  //Serial.print("valve command = ");Serial.println(valvecommand); delay(2000);
+  Serial.print("valve command = ");Serial.println(valvecommand); delay(1000);
   int valvestatus = getvalvestat();
   if (valvestatus < valve){//check if valve got to the new position
     return 0;
   }
   else return 1;
 }
-#define BMP_IMAGE_PATH "/225termi.bmp"
 
 void hvacontrol::tftwelcome(){ 
   //a nice greeting screen
@@ -442,13 +326,13 @@ void hvacontrol::tftwelcome(){
     //bmpDraw(BMP_IMAGE_PATH, 0, 0);   // draw it    
   ///entry.close();  // close the file
   //delay(2500);
-  tft.fillScreen(ST77XX_WHITE);//...black
+  tft.fillScreen(YELLOW);
 
-  tft.setTextColor(ST77XX_BLACK);
+  tft.setTextColor(BLACK);
   tft.println("Welcome to HVAC control!");
   tft.println("powered by NTG Solutions");
   delay(1000);
-  tft.fillScreen(ST77XX_WHITE);//...black
+  tft.fillScreen(BLACK);//...black
 }
 void hvacontrol::tftdatashow(float valve, float airtemp, float RH, float pipetemp){
   tft.setCursor(50, 10);

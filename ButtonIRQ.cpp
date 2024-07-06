@@ -27,7 +27,7 @@ void ButtonIRQ::begin() {
 
 bool ButtonIRQ::isTrue() {
    if (flag) {
-    flag = !flag; 
+    //flag = !flag; 
     return true;
   }
   else{return false;}
