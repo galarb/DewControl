@@ -212,7 +212,7 @@ void hvacontrol::run(float kpp, float kii, float kdd){
   else { //cooling
     float pipetempPV = getwatertemp();//a number between 0-50
     float pipetempSP = setpipetempcool();//dp+potentiometer. up to +15
-    int ValveValue = map(PIDcalc(pipetempPV, pipetempSP), 0, 50, 0, 100);
+    int ValveValue = map(PIDcalc(pipetempPV, pipetempSP), 0, 50, 100, 0);
     //Serial.print("pipetempPV = "); Serial.println(pipetempPV); 
     //Serial.print("pipetempSP = "); Serial.println(pipetempSP); //delay(2000);
     setValve(ValveValue);//expexts values between 0..100
@@ -256,6 +256,7 @@ float hvacontrol::setpipetempcool(){ // returns the setpoint pipe temp
   float tempdpreading = getdew_point();
   float poten = map(analogRead(PotenPin), 0, 1023, 0, 15);
   float dpdelta = tempdpreading + poten;
+  //float dpdelta = poten;
   //Serial.print("setdelta   = "); Serial.println(setdelta);//XX
   return dpdelta;
 }
@@ -287,8 +288,13 @@ bool hvacontrol::checkButton(){
 }
 
 float hvacontrol::getdew_point(){
-  float dewpoint = getairtemp() - ((100 - getRH()) / 5);
+  //float dewpoint = getairtemp() - ((100 - getRH()) / 5);
   //Serial.print("dewpoint = ");Serial.println(dewpoint);//XX
+  float a = 17.27;
+  float b = 237.7;
+  float T = getairtemp();
+  float Rh = getRH();
+  float dewpoint = (b*((a*T)/(b+T)+log(Rh/100)))/(a-((a*T)/(b+T)+log(Rh/100)));
 
   return dewpoint;
 }
