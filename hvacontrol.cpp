@@ -204,10 +204,27 @@ void hvacontrol::run(float kpp, float kii, float kdd){
   kp = kpp;
   ki = kii;
   kd = kdd;
-  if(mode == 1){//heating
-    tft.fillScreen(GREEN);
-    Serial.println("heating mode");
-    delay(5000);
+  if(mode){//heating
+    float pipetempPV = getwatertemp();//a number between 0-50
+    float pipetempSP = setpipetempcool();//dp+potentiometer. up to +15
+    int ValveValue = map(PIDcalc(pipetempPV, pipetempSP), 0, 50, 100, 0);
+    //Serial.print("pipetempPV = "); Serial.println(pipetempPV); 
+    //Serial.print("pipetempSP = "); Serial.println(pipetempSP); //delay(2000);
+    setValve(ValveValue);//expexts values between 0..100
+
+
+    if(checkButton()){
+      //Serial.println("data show mode");
+      //if (!selftest()){
+        tftdatashow(getvalvestat(), getairtemp(), getRH(), getwatertemp());
+        //Serial.println("Self test passed");
+        //}
+      }
+    else{
+      tftopershow(getdew_point(), setpipetempcool());
+      //Serial.println("operator show mode");
+    }
+
   }
   else { //cooling
     float pipetempPV = getwatertemp();//a number between 0-50
@@ -253,9 +270,13 @@ float hvacontrol::setpipetempcool(){ // returns the setpoint pipe temp
      }
    } 
   aLastState = aState; // Updates the previous state of the outputA with the current state*/
+  float coldpiptemp = 0;
   float tempdpreading = getdew_point();
   float poten = map(analogRead(PotenPin), 0, 1023, 0, 15);
   float dpdelta = tempdpreading + poten;
+    if (mode){ //heating
+      return coldpipetemp + poten;
+  }
   //float dpdelta = poten;
   //Serial.print("setdelta   = "); Serial.println(setdelta);//XX
   return dpdelta;
@@ -295,7 +316,6 @@ float hvacontrol::getdew_point(){
   float T = getairtemp();
   float Rh = getRH();
   float dewpoint = (b*((a*T)/(b+T)+log(Rh/100)))/(a-((a*T)/(b+T)+log(Rh/100)));
-
   return dewpoint;
 }
 

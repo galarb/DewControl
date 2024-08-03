@@ -28,7 +28,7 @@ void setup() {
 
 void loop() { 
   mycli.run();
-  hvac.run(5, 0, 0); 
+  hvac.run(10, 0, 0); 
   /* a Kp of 1 will yield the following :
   for example a pipe temp of 30 and SP of 20, DP = 18.
    PID out will be 10, valve will be sent a 20 value
