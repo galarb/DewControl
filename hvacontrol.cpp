@@ -7,10 +7,18 @@
 #include <SoftwareSerial.h> 
 #include <Adafruit_GFX.h>    // Core graphics library
 #include <Adafruit_ST7789.h> // Hardware-specific library for ST7789
+#include <Adafruit_ILI9341.h>
+
 #include <SPI.h>
 #include <SD.h>
 #include "ButtonIRQ.h"
 #include <TouchScreen.h> 
+
+#define TFT_CS        10
+#define TFT_RST        8 // Or set to -1 and connect to Arduino RESET pin
+#define TFT_DC         9
+#define TFT_MOSI 11  // Data out
+#define TFT_CLK 13  // Clock out
 
 #define WHITE 0x0000
 #define BLACK 0xFFFF
@@ -21,6 +29,7 @@
 #define GREEN 0xF81F
 #define BLUE 0xFFE0
 //#define X 0xFC00
+
 
 bool aState, aLastState; //encoder state variables
 //bool devMode = false; //a flag to control graphics
@@ -35,15 +44,12 @@ float sp = 25; //setpoint for heating
 bool direction = 1;
 float Vmin = 200; //part of 1024 of analog read.
 float Last_sp, Last_dp, Last_valve, Last_airtemp, Last_RH, Last_pipetemp;
-Adafruit_ST7789 tft = Adafruit_ST7789(10, 9, 8);//CS, dc(MISO), MOSI, SCK
-//9(CS), 11(COPI), 12(CIPO), 13(SCK)
-//(int8_t cs, int8_t dc, int8_t rst);
-/*reset 7 - blue(purple)
-DC 8 - yellow(black)
-CS 9 - green(black)
-clk 13 - yellow
-Mosi 11 - green
-miso 12 - blue(gray)*/
+
+//Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);//CS, dc, RST
+//Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);// CS, DC, RST
+Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_MOSI, TFT_CLK,TFT_RST);// CS, DC, RST
+//Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_MOSI, TFT_CLK, TFT_RST);
+
 ButtonIRQ devmodebutton(2); //initiate IRQ Button
 
 
@@ -78,8 +84,10 @@ void hvacontrol::begin(double bdrate) {
   pinMode(_valvecontrolPin, OUTPUT);
   pinMode(_ButtonPin, INPUT_PULLUP);
   aLastState = digitalRead(_encoderPinA); //setup the last var of encoder
+  //Wire.begin();
+  tft.begin();
+  tft.setTextColor(ILI9341_BLACK);
 
-  tft.init(240, 320); 
   tft.setRotation(1);     //to 90 deg
   tft.setTextSize(2); //1 is default 6x8, 2 is 12x16, 3 is 18x24
   //sdbegin();  
@@ -133,7 +141,7 @@ bool hvacontrol::checkmode(){
   double t = 0; //timer variable
   for (int c = 10; c > 0; c--){
     Serial.print(c);
-    tft.setTextColor(GREEN);
+    tft.setTextColor(ILI9341_GREEN);
     tft.setTextSize(3); //1 is default 6x8, 2 is 12x16, 3 is 18x24
     tft.setCursor(50, 5);
     tft.write("CHOOSE MODE");
@@ -147,20 +155,20 @@ bool hvacontrol::checkmode(){
     Serial.println(mode);
     if (mode == 1){ //hot mode
       Serial.println("Hot mode");
-      tft.setTextColor(RED);//...red 
+      tft.setTextColor(ILI9341_RED);//...red 
       tft.setCursor(40, 180);
       tft.write("Hot mode");
     }
     else{ //cold mode
       Serial.println("Cold mode");
-      tft.setTextColor(BLUE);//...blue
+      tft.setTextColor(ILI9341_BLUE);//...blue
       tft.setCursor(40, 180);
       tft.write("Cold mode");
     }
     while (t < 1000){
       t++;
       pinMode(_ButtonPin, INPUT_PULLUP);
-      delay(1);
+      delay(1);//shortenning the delay because of screen performance
       if (digitalRead(_ButtonPin) == 0){
         mode = !mode;
       }
@@ -169,7 +177,7 @@ bool hvacontrol::checkmode(){
         t = 1000;}//skip the timer
     }
     t = 0;
-    tft.fillScreen(BLACK);//..black
+    tft.fillScreen(ILI9341_BLACK);//..black
   }
   //Serial.print("mode ="); Serial.println(mode);
 
@@ -270,12 +278,12 @@ float hvacontrol::setpipetempcool(){ // returns the setpoint pipe temp
      }
    } 
   aLastState = aState; // Updates the previous state of the outputA with the current state*/
-  float coldpiptemp = 0;
+  float coldpipetemp = 0;
   float tempdpreading = getdew_point();
   float poten = map(analogRead(PotenPin), 0, 1023, 0, 15);
   float dpdelta = tempdpreading + poten;
     if (mode){ //heating
-      return coldpipetemp + poten;
+      return (coldpipetemp + poten);
   }
   //float dpdelta = poten;
   //Serial.print("setdelta   = "); Serial.println(setdelta);//XX
@@ -301,7 +309,7 @@ bool hvacontrol::checkButton(){
 
   if(laststat != stat){
     togsw = !togsw;
-    tft.fillScreen(BLACK);//to clear between the screens
+    tft.fillScreen(ILI9341_BLACK);//to clear between the screens
 
   }
   laststat = stat;
@@ -338,7 +346,7 @@ bool hvacontrol::setValve(int valve){//0..100
   if(valvecommand > 254){valvecommand = 254;}
   if(valvecommand < 0){valvecommand = 0;}
   analogWrite(_valvecontrolPin, valvecommand);
-  Serial.print("valve command = ");Serial.println(valvecommand); delay(1000);
+  Serial.print("valve command = ");Serial.println(valvecommand); //delay(1000);
   int valvestatus = getvalvestat();
   if (valvestatus < valve){//check if valve got to the new position
     return 0;
@@ -352,51 +360,48 @@ void hvacontrol::tftwelcome(){
     //bmpDraw(BMP_IMAGE_PATH, 0, 0);   // draw it    
   ///entry.close();  // close the file
   //delay(2500);
-  tft.fillScreen(YELLOW);
+  tft.fillScreen(ILI9341_YELLOW);
 
-  tft.setTextColor(BLACK);
+  tft.setTextColor(ILI9341_BLACK);
   tft.println("Welcome to HVAC control!");
   tft.println("powered by NTG Solutions");
   delay(1000);
-  tft.fillScreen(BLACK);//...black
+  tft.fillScreen(ILI9341_BLACK);
 }
 void hvacontrol::tftdatashow(float valve, float airtemp, float RH, float pipetemp){
   tft.setCursor(50, 10);
-  //tft.setTextColor(ST77XX_CYAN);//...red 
-  //tft.setTextColor(ST77XX_MAGENTA);//...green
-  tft.setTextColor(ST77XX_ORANGE);//... 
+  tft.setTextColor(ILI9341_BLUE);//... 
   if (mode){
-    tft.setTextColor(ST77XX_CYAN); 
+    tft.setTextColor(ILI9341_RED); 
   }
-  //...blue
   tft.setTextSize(3); //1 is default 6x8, 2 is 12x16, 3 is 18x24
   tft.write("HVAC CONTROL");
   tft.setTextSize(2); //1 is default 6x8, 2 is 12x16, 3 is 18x24
-  tft.setTextColor(ST77XX_BLACK);//...white
+  tft.setTextColor(ILI9341_WHITE);
   tft.setCursor(5, 38);
   tft.write("Valve Status");
   
   if (valve != Last_valve){
     tft.setCursor(250, 38);
-    tft.fillRoundRect(250, 38, 90, 18, 1, ST77XX_WHITE);
+    tft.fillRoundRect(250, 38, 90, 18, 1, ILI9341_BLACK);
     tft.print(valve);
     Last_valve = valve;
   }
   if (pipetemp != Last_pipetemp){
     tft.setCursor(250, 175);
-    tft.fillRoundRect(250, 175, 100, 18, 1, ST77XX_WHITE);
+    tft.fillRoundRect(250, 175, 100, 18, 1, ILI9341_BLACK);
     tft.print(pipetemp);
     Last_pipetemp = pipetemp;
   }
   if (airtemp != Last_airtemp){
     tft.setCursor(250, 83);
-    tft.fillRoundRect(250, 84, 100, 18, 1, ST77XX_WHITE);
+    tft.fillRoundRect(250, 84, 100, 18, 1, ILI9341_BLACK);
     tft.print(airtemp);
     Last_airtemp = airtemp;
   }
   if (RH != Last_RH){
     tft.setCursor(250, 129);
-    tft.fillRoundRect(250, 129, 90, 18, 1, ST77XX_WHITE);
+    tft.fillRoundRect(250, 129, 90, 18, 1, ILI9341_BLACK);
     tft.print(RH);
     Last_RH = RH;
   }
@@ -407,46 +412,43 @@ void hvacontrol::tftdatashow(float valve, float airtemp, float RH, float pipetem
   tft.setCursor(5, 175);
   tft.write("Pipe Temp");
 
-  tft.drawFastHLine(0, 56, 310, ST77XX_BLACK);
-  tft.drawFastHLine(0, 102, 310, ST77XX_BLACK);
-  tft.drawFastHLine(0, 148, 310, ST77XX_BLACK);
-  tft.drawFastHLine(0, 194, 310, ST77XX_BLACK);
+  tft.drawFastHLine(0, 56, 310, ILI9341_WHITE);
+  tft.drawFastHLine(0, 102, 310, ILI9341_WHITE);
+  tft.drawFastHLine(0, 148, 310, ILI9341_WHITE);
+  tft.drawFastHLine(0, 194, 310, ILI9341_WHITE);
 
-  tft.drawFastVLine(180, 35, 200, ST77XX_BLACK);
+  tft.drawFastVLine(180, 35, 200, ILI9341_WHITE);
 }
 void hvacontrol::tftopershow(float dp, float sp){
   tft.setCursor(50, 10);
-  //tft.setTextColor(ST77XX_CYAN);//...red 
-  //tft.setTextColor(ST77XX_MAGENTA);//...green 
-  tft.setTextColor(ST77XX_ORANGE);//... 
+  tft.setTextColor(ILI9341_BLUE);//... 
   if (mode){
-    tft.setTextColor(ST77XX_CYAN);
+    tft.setTextColor(ILI9341_RED);
     
   }
- // tft.setTextColor(ST77XX_YELLOW);//...blue
   tft.setTextSize(3); //1 is default 6x8, 2 is 12x16, 3 is 18x24
   tft.write("HVAC CONTROL");
   tft.setCursor(5, 70);
   tft.setTextSize(2); //1 is default 6x8, 2 is 12x16, 3 is 18x24
-  tft.setTextColor(ST77XX_BLACK);//...white
+  tft.setTextColor(ILI9341_WHITE);
   tft.write("Set Point");
   tft.setCursor(5, 140);
   tft.write("Dew Point");
   if (sp != Last_sp){
     tft.setCursor(220, 70);
-    tft.fillRoundRect(220, 70, 90, 20, 1, ST77XX_WHITE); 
+    tft.fillRoundRect(220, 70, 90, 20, 1, ILI9341_BLACK); 
     tft.print(sp);
     Last_sp = sp;
   }
   if (dp != Last_dp){
     tft.setCursor(220, 140);
-    tft.fillRoundRect(220, 140, 100, 20, 1, ST77XX_WHITE);
+    tft.fillRoundRect(220, 140, 100, 20, 1, ILI9341_BLACK);
     tft.print(dp);
     Last_dp = dp;
   }
-  tft.drawFastHLine(0, 110, 310, ST77XX_BLACK);
-  tft.drawFastVLine(180, 60, 100, ST77XX_BLACK);
-  delay(200);
+  tft.drawFastHLine(0, 110, 310, ILI9341_WHITE);
+  tft.drawFastVLine(180, 60, 100, ILI9341_WHITE);
+  //delay(200);
 }
 
 float hvacontrol::getairtemp(){
@@ -536,7 +538,7 @@ void hvacontrol::fault(int x){
 void hvacontrol::tftfault(int x){
   if(digitalRead(_alarmAckPin)){
     tft.fillRoundRect(0, 35, 320, 165, 1, ST77XX_WHITE);
-    tft.setTextColor(ST77XX_CYAN);
+    tft.setTextColor(ILI9341_CYAN);
     tft.setCursor(5, 160);
     tft.setTextSize(3);
     tft.print("FAULT ");
@@ -547,7 +549,7 @@ void hvacontrol::tftfault(int x){
     tft.print("Check Sensors Connection");
     tft.setCursor(90, 210);
     tft.print("and power");
-    delay(1000);
+    //delay(1000);
     tft.fillRoundRect(70, 200, 200, 18, 1, ST77XX_WHITE);
     tft.fillRoundRect(20, 220, 300, 18, 1, ST77XX_WHITE);
   }
