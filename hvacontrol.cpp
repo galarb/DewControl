@@ -42,7 +42,7 @@ bool mode; //heating 1, cooling 0
 bool alarmAck = false; //true overides the default tft 
 float sp = 25; //setpoint for heating
 bool direction = 1;
-float Vmin = 200; //part of 1024 of analog read.
+float Vmin = 100; //part of 1024 of analog read.
 float Last_sp, Last_dp, Last_valve, Last_airtemp, Last_RH, Last_pipetemp;
 
 //Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);//CS, dc, RST
@@ -156,12 +156,14 @@ bool hvacontrol::checkmode(){
     if (mode == 1){ //hot mode
       Serial.println("Hot mode");
       tft.setTextColor(ILI9341_RED);//...red 
+      tft.fillRoundRect(39, 179, 200, 30, 3, ILI9341_BLACK);
       tft.setCursor(40, 180);
       tft.write("Hot mode");
     }
     else{ //cold mode
       Serial.println("Cold mode");
       tft.setTextColor(ILI9341_BLUE);//...blue
+      tft.fillRoundRect(39, 179, 200, 30, 3, ILI9341_BLACK);
       tft.setCursor(40, 180);
       tft.write("Cold mode");
     }
@@ -177,10 +179,10 @@ bool hvacontrol::checkmode(){
         t = 1000;}//skip the timer
     }
     t = 0;
-    tft.fillScreen(ILI9341_BLACK);//..black
+    tft.fillRoundRect(9, 119, 40, 30, 3, ILI9341_BLACK);
   }
   //Serial.print("mode ="); Serial.println(mode);
-
+  tft.fillScreen(ILI9341_BLACK);
   return mode;
 }
 double hvacontrol::PIDcalc(double inp, int sp){
@@ -223,10 +225,10 @@ void hvacontrol::run(float kpp, float kii, float kdd){
 
     if(checkButton()){
       //Serial.println("data show mode");
-      //if (!selftest()){
+      if (!selftest()){
         tftdatashow(getvalvestat(), getairtemp(), getRH(), getwatertemp());
         //Serial.println("Self test passed");
-        //}
+        }
       }
     else{
       tftopershow(getdew_point(), setpipetempcool());
@@ -252,6 +254,8 @@ void hvacontrol::run(float kpp, float kii, float kdd){
     else{
       tftopershow(getdew_point(), setpipetempcool());
       //Serial.println("operator show mode");
+      selftest();
+
     }
   }
   Last_dp = 0;
@@ -360,12 +364,9 @@ void hvacontrol::tftwelcome(){
     //bmpDraw(BMP_IMAGE_PATH, 0, 0);   // draw it    
   ///entry.close();  // close the file
   //delay(2500);
-  tft.fillScreen(ILI9341_YELLOW);
-
-  tft.setTextColor(ILI9341_BLACK);
+  tft.setTextColor(ILI9341_RED);
   tft.println("Welcome to HVAC control!");
   tft.println("powered by NTG Solutions");
-  delay(1000);
   tft.fillScreen(ILI9341_BLACK);
 }
 void hvacontrol::tftdatashow(float valve, float airtemp, float RH, float pipetemp){
@@ -478,17 +479,17 @@ void hvacontrol::sdbegin(){
       }    
 }
 bool hvacontrol::selftest(){
-  if (digitalRead(_alarmAckPin) == 0){
-    return false;
-  }
+  //if (digitalRead(_alarmAckPin) == 0){
+    //return false;
+  //}
   //check all inputs for failure. 
   //calls fault(x)//1 - valve, 2 - temp, 3 - RH, 4 - airTemp
-  float valvestat = analogRead(ValveStatusPin);
+  /*float valvestat = analogRead(ValveStatusPin);
   float valvestat2 = analogRead(ValveStatusPin);
   if(valvestat  < Vmin &&  valvestat2 < Vmin){
     fault(1);
     return true;
-  }
+  }*/
   float PipeTemp = analogRead(WaterTempPin);
   float PipeTemp2 = analogRead(WaterTempPin);
   if(PipeTemp  < Vmin &&  PipeTemp2 < Vmin){
@@ -508,12 +509,14 @@ bool hvacontrol::selftest(){
     fault(4);
     return true;
   }  
+  tft.fillRoundRect(0, 174, 320, 70, 1, ILI9341_BLACK);
+
   return false;
 }
 void hvacontrol::fault(int x){
 
 
-  //Serial.print("x = "); Serial.println(x);
+  Serial.print("x = "); Serial.println(x);
 
   switch (x) {
     case 1: //error message 1 , valve sensor disconnected
@@ -537,20 +540,28 @@ void hvacontrol::fault(int x){
 
 void hvacontrol::tftfault(int x){
   if(digitalRead(_alarmAckPin)){
-    tft.fillRoundRect(0, 35, 320, 165, 1, ST77XX_WHITE);
+    tft.fillRoundRect(0, 174, 320, 70, 1, ILI9341_RED);
     tft.setTextColor(ILI9341_CYAN);
-    tft.setCursor(5, 160);
+    tft.setCursor(5, 175);
     tft.setTextSize(3);
     tft.print("FAULT ");
     tft.print(x);
     tft.print(" detected!");
     tft.setTextSize(2);
-    tft.setCursor(15, 190);
-    tft.print("Check Sensors Connection");
-    tft.setCursor(90, 210);
-    tft.print("and power");
+    tft.setCursor(15, 210);
+
+    switch (x){
+      case 2:
+        tft.print("water temp sensor disconnected!");
+        break;
+      case 3:
+        tft.print("RH sensor disconnected!");
+        break;
+      case 4:
+        tft.print("air temp sensor disconnected!");
+        break;
+    }
+
     //delay(1000);
-    tft.fillRoundRect(70, 200, 200, 18, 1, ST77XX_WHITE);
-    tft.fillRoundRect(20, 220, 300, 18, 1, ST77XX_WHITE);
   }
 }
